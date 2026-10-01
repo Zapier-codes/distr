@@ -7,8 +7,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/distr-sh/distr/internal/apierrors"
@@ -90,4 +92,31 @@ func SendBuildReady(ctx context.Context, tenantConfigID uuid.UUID, baseURL strin
 		return err
 	}
 	return db.MarkTenantBuildEmailSent(ctx, tenantConfigID)
+}
+
+// testSubscriberID is the Novu subscriber of a sample mail. It is derived from the address, so a sample mail never
+// reuses (and never rewrites the address of) the subscriber of a real tenant record, which is the id of that record.
+func testSubscriberID(email string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
+	return "distr-test-" + hex.EncodeToString(sum[:8])
+}
+
+// testPayload is the payload of a sample mail: the same two fields as the real one, with a link that leads to the
+// public storefront instead of a download, since no build exists.
+func testPayload(baseURL string) map[string]string {
+	return map[string]string{
+		"appName":     "Sample app",
+		"downloadUrl": baseURL + "/store",
+	}
+}
+
+// SendTestMail triggers the build-ready workflow once with a sample payload, for the operator to check that the Novu
+// instance of this deployment (leaf f.xi) is reachable, accepts the key and sends. It touches no tenant record and
+// stores nothing. Success means Novu accepted the trigger, not that the mail was delivered.
+func SendTestMail(ctx context.Context, email, baseURL string) error {
+	client, err := novu.FromEnv()
+	if err != nil {
+		return err
+	}
+	return client.Trigger(ctx, env.Novu().BuildReadyWorkflowID, testSubscriberID(email), email, testPayload(baseURL))
 }

@@ -18,7 +18,7 @@ Written, **not applied, not deployed, not run**. Everything below is the intende
    - `DISTR_HOST`: the public https origin, no path.
    - `STOREAPP_BUILD_GITHUB_TOKEN`: fine-grained token on the Storeapp repository only, **Actions: read and write** and **Contents: read** (`f.iii` and `f.v` flagged both).
    - `STOREAPP_BUILD_CONFIG_TOKEN`: at least 32 characters, the same value as the Storeapp repository secret of that name.
-   - `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET` (set both or neither), and `NOVU_*` once `f.xi` exists.
+   - `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET` (set both or neither), and `NOVU_API_KEY` (plus `NOVU_API_URL` for the EU region or a self-hosted Novu) from distr's own Novu instance, provisioned by `deploy/novu/README.md` (`f.xi`); that file also has the check that confirms a mail is sent.
 5. Copy the service's **Deploy Hook** URL into the GitHub repository secret `RENDER_DEPLOY_HOOK_URL`. Pushes then deploy.
 6. Check `https://<DISTR_HOST>/ready` answers 200, then `/store`.
 

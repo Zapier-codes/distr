@@ -69,7 +69,7 @@ services:
       - key: TURNSTILE_SECRET
         sync: false
       - key: NOVU_API_KEY
-        sync: false # distr's OWN Novu instance (f.xi), not Zealot's
+        sync: false # distr's OWN Novu instance (f.xi, runbook in deploy/novu/README.md), not Zealot's
       - key: NOVU_API_URL
         sync: false
       - key: NOVU_BUILD_READY_WORKFLOW_ID

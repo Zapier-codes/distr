@@ -1,21 +1,31 @@
 <!--
-  Body of the Novu email step of the "tenant-build-ready" workflow (leaf f.v). Paste it into the step's custom HTML
-  editor. Distr triggers the workflow with the payload fields appName and downloadUrl, and nothing else: the mail has
-  a single button, and never carries a file or a GitHub link.
+  Body of the Novu email step of the "tenant-build-ready" workflow (leaf f.v, instance provisioned by f.xi, see
+  README.md). Paste it into the step's custom HTML editor. Distr triggers the workflow with the payload fields
+  appName and downloadUrl, and nothing else: the mail has a single button, and never carries a file or a GitHub link.
   Suggested subject: Your {{payload.appName}} app is ready
+  The sender name and address are set on the email integration in Novu, not here.
 -->
-<div style="font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: #1f2937;">
-  <h1 style="font-size: 22px; margin: 0 0 16px;">Your app is ready</h1>
-  <p style="font-size: 16px; line-height: 1.5; margin: 0 0 28px;">
-    The build of <strong>{{payload.appName}}</strong> has finished. Download the app to your Android phone and open
-    the file to install it.
-  </p>
-  <p style="text-align: center; margin: 0 0 28px;">
-    <a href="{{payload.downloadUrl}}"
-       style="display: inline-block; background: #111827; color: #ffffff; text-decoration: none; font-size: 18px;
-              font-weight: bold; padding: 16px 40px; border-radius: 8px;">Download your app</a>
-  </p>
-  <p style="font-size: 13px; line-height: 1.5; color: #6b7280; margin: 0;">
-    The link works for 30 days. If you did not ask for this app, you can ignore this email.
-  </p>
+<div style="display: none; max-height: 0; overflow: hidden; opacity: 0; font-size: 1px; line-height: 1px; color: #ffffff;">
+  Your app has finished building. Download it to your Android phone.
+</div>
+<div style="background: #f3f4f6; padding: 24px 12px;">
+  <div style="font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px 24px; color: #1f2937;">
+    <h1 style="font-size: 22px; margin: 0 0 16px;">Your app is ready</h1>
+    <p style="font-size: 16px; line-height: 1.5; margin: 0 0 28px;">
+      The build of <strong>{{payload.appName}}</strong> has finished. Open this email on your Android phone, download
+      the app and open the file to install it. If your phone asks, allow installing from this source.
+    </p>
+    <p style="text-align: center; margin: 0 0 28px;">
+      <a href="{{payload.downloadUrl}}"
+         style="display: inline-block; background: #111827; color: #ffffff; text-decoration: none; font-size: 18px;
+                font-weight: bold; padding: 16px 40px; border-radius: 8px;">Download your app</a>
+    </p>
+    <p style="font-size: 13px; line-height: 1.5; color: #6b7280; margin: 0 0 12px; word-break: break-all;">
+      If the button does not work, copy this link into your browser:<br>
+      {{payload.downloadUrl}}
+    </p>
+    <p style="font-size: 13px; line-height: 1.5; color: #6b7280; margin: 0;">
+      The link works for 30 days. If you did not ask for this app, you can ignore this email.
+    </p>
+  </div>
 </div>

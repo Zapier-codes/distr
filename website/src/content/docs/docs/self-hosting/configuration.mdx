@@ -142,6 +142,11 @@ record, and the payload is `appName` and `downloadUrl`. `deploy/novu/tenant-buil
 step. If Novu does not accept the trigger, the report answers `502`, and the workflow's repeat of it tries again; once
 Novu has accepted it, a repeat sends nothing.
 
+The Novu instance is meant to be one of its own, with its own credentials, sender identity and templates, and not one
+shared with another system. `deploy/novu/README.md` is the runbook that sets it up. To check it, run the same image with
+the same Novu values and `distr novu-test you@example.com`, which sends one sample mail through the build-ready workflow
+and reads no tenant record.
+
 | Variable                       | Required | Default                | Description                                                       |
 | ------------------------------ | -------- | ---------------------- | ----------------------------------------------------------------- |
 | `NOVU_API_KEY`                 | no       | —                      | Secret key of the Novu environment. Keep it secret.               |
