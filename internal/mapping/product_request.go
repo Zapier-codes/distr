@@ -8,12 +8,15 @@ import (
 	"github.com/distr-sh/distr/internal/types"
 )
 
-func ProductRequestToAPI(request types.ProductRequest, tenant types.TenantConfig) api.ProductRequest {
+func ProductRequestToAPI(
+	request types.ProductRequest, tenant types.TenantConfig, gate types.ProductRequestGate,
+) api.ProductRequest {
 	return api.ProductRequest{
 		ID:          request.ID,
 		CreatedAt:   request.CreatedAt,
 		TenantID:    tenant.TenantID,
 		BuildStatus: tenant.BuildStatus,
+		Gate:        gate,
 	}
 }
 

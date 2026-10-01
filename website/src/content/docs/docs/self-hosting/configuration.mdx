@@ -157,6 +157,20 @@ and reads no tenant record.
 | ----------------------------- | -------- | ------- | ----------------------------------------------------------------------------------- |
 | `STOREAPP_BUILD_CONFIG_TOKEN` | no       | —       | Bearer token of the build-config endpoint, 32 characters or more. Keep it secret.   |
 
+### Free tier
+
+Each device gets one free product. The storefront sends the SHA-256 of a few device signals (user agent, language,
+screen size, time zone and similar) with the request. Distr keys that digest with `DEVICE_FINGERPRINT_SALT`
+(HMAC-SHA256) and stores only the result, never the signals or the digest, and uses it for nothing but this check. A
+request from a device with no earlier claim is free and its build is dispatched; any other request, a request without a
+fingerprint, and every request on an instance without the salt stays `awaiting_gate` until it is paid for. This
+deters repeated free claims, it does not identify anyone: a shared device can be counted as one, and switching browser
+or device gets around it. Describe the check in your privacy notice before you enable it.
+
+| Variable                  | Required | Default | Description                                                                          |
+| ------------------------- | -------- | ------- | ------------------------------------------------------------------------------------ |
+| `DEVICE_FINGERPRINT_SALT` | no       | —       | Key of the fingerprint hash, 32 characters or more. Keep it secret and never change it. |
+
 ## Agents
 
 | Variable              | Required | Default | Description                                                                                                                                                                                                                                                                                 |

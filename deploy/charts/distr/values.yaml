@@ -173,6 +173,10 @@ distr:
     # Without it the build-config endpoint does not exist. Use the same value as the workflow's secret.
     # - name: STOREAPP_BUILD_CONFIG_TOKEN
     #   value: ''
+    # Key of the device-fingerprint hash behind the one-free-product-per-device check, at least 32 random characters.
+    # Without it no request is free. Never change it once set.
+    # - name: DEVICE_FINGERPRINT_SALT
+    #   value: ''
     # Hand the "your app is ready" mail off to a Novu workflow. Without the key a finished build sends no mail.
     # Use a Novu instance of its own for this, see deploy/novu/README.md.
     # - name: NOVU_API_KEY

@@ -31,13 +31,18 @@ export interface CreateProductRequestRequest {
   themeColor: string;
   icon?: ProductRequestIcon;
   turnstileToken?: string;
+  // SHA-256 of device signals, hex. Only used to give each device one free product.
+  deviceFingerprint?: string;
 }
 
 export type TenantBuildStatus = 'awaiting_gate' | 'queued' | 'building' | 'succeeded' | 'failed';
+
+export type ProductRequestGate = 'free' | 'payment_required';
 
 export interface ProductRequest {
   id: string;
   createdAt: string;
   tenantId: string;
   buildStatus: TenantBuildStatus;
+  gate: ProductRequestGate;
 }

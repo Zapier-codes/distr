@@ -53,10 +53,18 @@
             @let done = submitted();
             @if (done) {
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Request received</h2>
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Your request for {{ form.value.appName }} is registered. We will contact you at
-                {{ form.value.contactEmail }}.
-              </p>
+              @if (done.gate === 'free') {
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Your request for {{ form.value.appName }} is registered and is your free product. We will contact you
+                  at {{ form.value.contactEmail }}.
+                </p>
+              } @else {
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Your request for {{ form.value.appName }} is registered. A free product has already been used from
+                  this device, or could not be checked, so this one needs to be paid for before it is built. We will
+                  contact you at {{ form.value.contactEmail }}.
+                </p>
+              }
               <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">
                 Reference:
                 <code class="break-all">{{ done.id }}</code>

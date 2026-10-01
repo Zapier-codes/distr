@@ -8,8 +8,10 @@ import (
 
 	"github.com/distr-sh/distr/api"
 	"github.com/distr-sh/distr/internal/apierrors"
+	"github.com/distr-sh/distr/internal/buildtrigger"
 	internalctx "github.com/distr-sh/distr/internal/context"
 	"github.com/distr-sh/distr/internal/db"
+	"github.com/distr-sh/distr/internal/devicefingerprint"
 	"github.com/distr-sh/distr/internal/env"
 	"github.com/distr-sh/distr/internal/mapping"
 	"github.com/distr-sh/distr/internal/tenantconfig"
@@ -96,8 +98,11 @@ func createProductRequestHandler(w http.ResponseWriter, r *http.Request) {
 
 	var createdRequest *types.ProductRequest
 	var createdTenant *types.TenantConfig
+	var service *types.ProductService
+	gate := types.ProductRequestGatePaymentRequired
 	err = db.RunTx(ctx, func(ctx context.Context) error {
-		if _, err := db.GetActiveProductServiceByID(ctx, request.ProductServiceID); err != nil {
+		var err error
+		if service, err = db.GetActiveProductServiceByID(ctx, request.ProductServiceID); err != nil {
 			return err
 		}
 
@@ -109,6 +114,13 @@ func createProductRequestHandler(w http.ResponseWriter, r *http.Request) {
 		toCreate := mapping.ProductRequestToInternal(request)
 		toCreate.TenantConfigID = &tenant.ID
 		created, err := db.CreateProductRequest(ctx, toCreate)
+		if err != nil {
+			return err
+		}
+
+		// The claim is made in the same transaction as the records it is for, so a request that fails after it
+		// does not use up the free product of the device.
+		gate, tenant, err = applyFreeTierGate(ctx, request.DeviceFingerprint, tenant)
 		if err != nil {
 			return err
 		}
@@ -126,7 +138,67 @@ func createProductRequestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	RespondJSONWithStatus(w, http.StatusCreated, mapping.ProductRequestToAPI(*createdRequest, *createdTenant))
+	if gate == types.ProductRequestGateFree && service.Type == types.ProductServiceTypeApp {
+		createdTenant = dispatchFreeBuild(ctx, createdTenant)
+	}
+
+	RespondJSONWithStatus(w, http.StatusCreated, mapping.ProductRequestToAPI(*createdRequest, *createdTenant, gate))
+}
+
+// applyFreeTierGate is the free/paid check (f.xii). A request is free when the instance has a salt, the browser sent
+// a fingerprint, and no earlier request from that device claimed its free product; the record then moves from
+// awaiting_gate to queued, which is the only way a record reaches a build. Every other request is left
+// awaiting_gate for the payment step (f.xiii). The fingerprint is only ever stored as a salted hash.
+func applyFreeTierGate(
+	ctx context.Context, deviceFingerprint string, tenant *types.TenantConfig,
+) (types.ProductRequestGate, *types.TenantConfig, error) {
+	salt := env.DeviceFingerprintSalt()
+	if salt == nil || deviceFingerprint == "" {
+		return types.ProductRequestGatePaymentRequired, tenant, nil
+	}
+
+	hash, err := devicefingerprint.Hash(*salt, deviceFingerprint)
+	if err != nil {
+		return "", nil, err
+	}
+	claimed, err := db.ClaimFreeTier(ctx, hash, tenant.ID)
+	if err != nil {
+		return "", nil, err
+	}
+	if !claimed {
+		return types.ProductRequestGatePaymentRequired, tenant, nil
+	}
+
+	queued, err := db.TransitionTenantBuildStatus(
+		ctx, tenant.ID, types.TenantBuildStatusAwaitingGate, types.TenantBuildStatusQueued, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	return types.ProductRequestGateFree, queued, nil
+}
+
+// dispatchFreeBuild starts the build of a record the gate has queued and returns the record as it is afterwards. A
+// failure to dispatch is not the requester's: the request is registered either way, and the record is left queued
+// (nothing configured yet) or failed (GitHub refused), both visible to the operator.
+func dispatchFreeBuild(ctx context.Context, tenant *types.TenantConfig) *types.TenantConfig {
+	log := internalctx.GetLogger(ctx)
+	// The request is registered, so the dispatch must not be cut short because the requester went away.
+	ctx = context.WithoutCancel(ctx)
+
+	if err := buildtrigger.DispatchTenantBuild(ctx, tenant.ID); errors.Is(err, buildtrigger.ErrNotConfigured) {
+		log.Warn("a free tenant build is queued but dispatch is not configured",
+			zap.String("tenantId", tenant.TenantID))
+	} else if err != nil {
+		log.Warn("could not dispatch a free tenant build",
+			zap.String("tenantId", tenant.TenantID), zap.Error(err))
+	}
+
+	current, _, err := db.GetTenantConfigForBuild(ctx, tenant.ID)
+	if err != nil {
+		log.Warn("could not reload a tenant record after dispatch", zap.Error(err))
+		return tenant
+	}
+	return current
 }
 
 // createTenantConfig inserts the record under a freshly generated tenant_id, generating another when it is taken.

@@ -19,3 +19,15 @@ type ProductRequest struct {
 	// predate the storefront.
 	TenantConfigID *uuid.UUID `db:"tenant_config_id"`
 }
+
+// ProductRequestGate is the outcome of the free/paid check a request goes through when it is submitted.
+type ProductRequestGate string
+
+const (
+	// ProductRequestGateFree means the request used the free product of its device. Its tenant record is queued.
+	ProductRequestGateFree ProductRequestGate = "free"
+	// ProductRequestGatePaymentRequired means the request stays awaiting_gate until it is paid for (f.xiii). It
+	// is the answer for a device that already claimed its free product, for a request that carried no usable
+	// fingerprint, and for an instance without DEVICE_FINGERPRINT_SALT.
+	ProductRequestGatePaymentRequired ProductRequestGate = "payment_required"
+)

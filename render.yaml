@@ -64,6 +64,8 @@ services:
         sync: false # fine-grained: Actions read/write + Contents read, on the one repository
       - key: STOREAPP_BUILD_CONFIG_TOKEN
         sync: false # >= 32 chars; the same value as Storeapp's STOREAPP_BUILD_CONFIG_TOKEN repository secret
+      - key: DEVICE_FINGERPRINT_SALT
+        sync: false # >= 32 random chars; changing it forgets every free claim, so never rotate it
       - key: TURNSTILE_SITE_KEY
         sync: false
       - key: TURNSTILE_SECRET

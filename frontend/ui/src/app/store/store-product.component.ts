@@ -3,6 +3,7 @@ import {toSignal} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {ActivatedRoute, RouterLink} from '@angular/router';
 import {catchError, firstValueFrom, map, of, switchMap} from 'rxjs';
+import {deviceFingerprint} from '../../util/device-fingerprint';
 import {getFormDisplayedError} from '../../util/errors';
 import {PortalLogoComponent} from '../components/portal-logo/portal-logo.component';
 import {TurnstileComponent} from '../components/turnstile.component';
@@ -119,6 +120,7 @@ export class StoreProductComponent {
             themeColor: value.themeColor!,
             icon: this.icon(),
             turnstileToken,
+            deviceFingerprint: await deviceFingerprint(),
           })
         )
       );

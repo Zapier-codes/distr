@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/distr-sh/distr/internal/devicefingerprint"
 	"github.com/distr-sh/distr/internal/types"
 	"github.com/distr-sh/distr/internal/validation"
 	"github.com/google/uuid"
@@ -41,6 +42,9 @@ type CreateProductRequestRequest struct {
 	Icon *ProductRequestIcon `json:"icon,omitempty"`
 	// TurnstileToken is required when the instance has Turnstile configured.
 	TurnstileToken string `json:"turnstileToken,omitempty"`
+	// DeviceFingerprint is the lower case hex SHA-256 of the device signals the browser computed. It is optional: a
+	// request without one is accepted and is never free. It is only used to give each device one free product.
+	DeviceFingerprint string `json:"deviceFingerprint,omitempty"`
 }
 
 // ProductRequestIcon is an uploaded icon. Data is base64 in JSON.
@@ -98,6 +102,9 @@ func (r *CreateProductRequestRequest) Validate() error {
 			return err
 		}
 	}
+	if r.DeviceFingerprint != "" && !devicefingerprint.ValidClientHash(r.DeviceFingerprint) {
+		return validation.NewValidationFailedError("the device check is malformed, please reload the page and try again")
+	}
 	return nil
 }
 
@@ -108,4 +115,7 @@ type ProductRequest struct {
 	TenantID string `json:"tenantId"`
 	// BuildStatus is awaiting_gate until the free/paid check has cleared the request.
 	BuildStatus types.TenantBuildStatus `json:"buildStatus"`
+	// Gate is free when the request used the free product of its device, and payment_required when it has to be paid
+	// for before anything is built.
+	Gate types.ProductRequestGate `json:"gate"`
 }

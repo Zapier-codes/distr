@@ -62,6 +62,7 @@ var (
 	storeappBuild                         *StoreappBuildConfig
 	storeappBuildConfigToken              *string
 	novu                                  *NovuConfig
+	deviceFingerprintSalt                 *string
 	registryEnabled                       bool
 	registryS3Config                      S3Config
 	registryScratchDir                    *string
@@ -190,6 +191,7 @@ func Initialize() {
 	storeappBuild = parseStoreappBuildConfig()
 	storeappBuildConfigToken = parseStoreappBuildConfigToken()
 	novu = parseNovuConfig()
+	deviceFingerprintSalt = parseDeviceFingerprintSalt()
 	inviteTokenValidDuration = envutil.GetEnvParsedOrDefault(
 		"INVITE_TOKEN_VALID_DURATION", envparse.PositiveDuration, 24*time.Hour,
 	)
@@ -570,6 +572,12 @@ func Novu() *NovuConfig {
 	return novu
 }
 
+// DeviceFingerprintSalt is the key the free-tier gate hashes device fingerprints with, or nil when it is not
+// configured. Without it no request is free: every one stays awaiting_gate.
+func DeviceFingerprintSalt() *string {
+	return deviceFingerprintSalt
+}
+
 func SupportEmail() *string {
 	return supportEmail
 }
@@ -910,6 +918,25 @@ func parseStoreappBuildConfigToken() *string {
 		return nil
 	}
 	return &token
+}
+
+// MinDeviceFingerprintSaltLength is the shortest DEVICE_FINGERPRINT_SALT that is accepted. The salt is the only thing
+// that keeps a stored fingerprint hash from being matched against fingerprints computed elsewhere.
+const MinDeviceFingerprintSaltLength = 32
+
+// parseDeviceFingerprintSalt reads DEVICE_FINGERPRINT_SALT. A salt shorter than MinDeviceFingerprintSaltLength
+// disables the free tier, with a warning, rather than hashing with something that can be guessed.
+func parseDeviceFingerprintSalt() *string {
+	salt := envutil.GetEnv("DEVICE_FINGERPRINT_SALT")
+	if salt == "" {
+		return nil
+	}
+	if len(salt) < MinDeviceFingerprintSaltLength {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: DEVICE_FINGERPRINT_SALT must be at least 32 characters, the free tier has been disabled")
+		return nil
+	}
+	return &salt
 }
 
 // NovuConfig says where the "your app is ready" mail is handed off: one workflow of one Novu instance, triggered
