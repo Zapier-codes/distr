@@ -173,6 +173,13 @@ distr:
     # Without it the build-config endpoint does not exist. Use the same value as the workflow's secret.
     # - name: STOREAPP_BUILD_CONFIG_TOKEN
     #   value: ''
+    # Hand the "your app is ready" mail off to a Novu workflow. Without the key a finished build sends no mail.
+    # - name: NOVU_API_KEY
+    #   value: ''
+    # - name: NOVU_API_URL
+    #   value: 'https://api.novu.co'
+    # - name: NOVU_BUILD_READY_WORKFLOW_ID
+    #   value: 'tenant-build-ready'
     - name: USER_EMAIL_VERIFICATION_REQUIRED
       value: 'false'
     - name: METRICS_ENTRIES_MAX_AGE

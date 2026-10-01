@@ -128,6 +128,26 @@ URL, and its repository has to be `STOREAPP_BUILD_REPOSITORY`. The report only a
 and answers `409` otherwise; repeating a report that was already applied answers `204` again. Both endpoints answer
 404 unless `STOREAPP_BUILD_GITHUB_TOKEN` and `STOREAPP_BUILD_CONFIG_TOKEN` are set.
 
+### Mail about a finished build
+
+When a build is reported as succeeded, Distr triggers a Novu workflow that mails the requester a single download
+button. The button does not point at GitHub: it points at `/api/public/v1/build-downloads/{token}` on Distr. On click,
+Distr asks GitHub for the short-lived signed URL of the release asset with `STOREAPP_BUILD_GITHUB_TOKEN`, and redirects
+the browser to it, so the browser never sees a credential. The token in the link is random, only its SHA-256 is stored,
+and it works for 30 days. Because the token also has to read the release asset, give it the **Contents** repository
+permission set to read as well. Without `NOVU_API_KEY` the build is recorded and no mail is sent.
+
+The workflow is triggered with `POST {NOVU_API_URL}/v1/events/trigger`, the subscriber id is the id of the tenant
+record, and the payload is `appName` and `downloadUrl`. `deploy/novu/tenant-build-ready.html` is the body of the email
+step. If Novu does not accept the trigger, the report answers `502`, and the workflow's repeat of it tries again; once
+Novu has accepted it, a repeat sends nothing.
+
+| Variable                       | Required | Default                | Description                                                       |
+| ------------------------------ | -------- | ---------------------- | ----------------------------------------------------------------- |
+| `NOVU_API_KEY`                 | no       | —                      | Secret key of the Novu environment. Keep it secret.               |
+| `NOVU_API_URL`                 | no       | `https://api.novu.co`  | Base URL of the Novu API, for a self-hosted instance.             |
+| `NOVU_BUILD_READY_WORKFLOW_ID` | no       | `tenant-build-ready`   | Identifier of the Novu workflow that sends the mail.              |
+
 | Variable                      | Required | Default | Description                                                                         |
 | ----------------------------- | -------- | ------- | ----------------------------------------------------------------------------------- |
 | `STOREAPP_BUILD_CONFIG_TOKEN` | no       | —       | Bearer token of the build-config endpoint, 32 characters or more. Keep it secret.   |

@@ -8,6 +8,7 @@ import (
 
 	"github.com/distr-sh/distr/api"
 	"github.com/distr-sh/distr/internal/apierrors"
+	"github.com/distr-sh/distr/internal/buildnotify"
 	internalctx "github.com/distr-sh/distr/internal/context"
 	"github.com/distr-sh/distr/internal/db"
 	"github.com/distr-sh/distr/internal/env"
@@ -108,6 +109,10 @@ func postBuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if buildReportAlreadyApplied(request, *current) {
+			// A repeat is how a mail that Novu did not accept gets another attempt.
+			if mailBuildReady(w, r, request) {
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -120,7 +125,33 @@ func postBuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Info("tenant build reported",
 		zap.String("tenantConfigId", request.TenantConfigID.String()), zap.String("status", string(request.Status)))
+	if mailBuildReady(w, r, request) {
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// mailBuildReady hands the mail about a succeeded build off to Novu, and reports whether it answered the request
+// with an error. The build is already recorded by then, so the error says so, and the workflow's repeat of the report
+// is what tries again. A failed build sends nothing, and an instance without Novu records the build and sends nothing.
+func mailBuildReady(w http.ResponseWriter, r *http.Request, request api.BuildStatusRequest) bool {
+	if request.Status != types.TenantBuildStatusSucceeded {
+		return false
+	}
+	ctx := r.Context()
+	err := buildnotify.SendBuildReady(ctx, request.TenantConfigID, publicBaseURL(env.Host(), env.HostScheme()))
+	if errors.Is(err, buildnotify.ErrNotConfigured) {
+		internalctx.GetLogger(ctx).Warn("a tenant build succeeded but NOVU_API_KEY is not set, no mail was sent",
+			zap.String("tenantConfigId", request.TenantConfigID.String()))
+		return false
+	} else if err != nil {
+		internalctx.GetLogger(ctx).Warn("could not hand the build mail off", zap.Error(err))
+		sentry.GetHubFromContext(ctx).CaptureException(err)
+		http.Error(w, "the build was recorded, but the mail could not be sent, report it again to retry",
+			http.StatusBadGateway)
+		return true
+	}
+	return false
 }
 
 // buildReportAlreadyApplied reports whether current is the state the report would have produced. A failed report

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/distr-sh/distr/internal/apierrors"
 	internalctx "github.com/distr-sh/distr/internal/context"
@@ -164,6 +165,89 @@ func CompleteTenantBuild(
 		return nil, apierrors.ErrConflict
 	} else if err != nil {
 		return nil, fmt.Errorf("could not complete TenantConfig build: %w", err)
+	}
+	return &result, nil
+}
+
+// BuildReadyRecipient is who the mail about a finished build goes to.
+type BuildReadyRecipient struct {
+	ContactEmail string
+	AppName      string
+	// EmailSentAt is nil until Novu accepted the mail.
+	EmailSentAt *time.Time
+}
+
+// GetBuildReadyRecipient returns apierrors.ErrNotFound when no request is attached to the record.
+func GetBuildReadyRecipient(ctx context.Context, tenantConfigID uuid.UUID) (*BuildReadyRecipient, error) {
+	db := internalctx.GetDb(ctx)
+	var result BuildReadyRecipient
+	err := db.QueryRow(ctx,
+		`SELECT pr.contact_email, pr.app_name, tc.build_email_sent_at
+		FROM ProductRequest pr
+		JOIN TenantConfig tc ON tc.id = pr.tenant_config_id
+		WHERE tc.id = @id`,
+		pgx.NamedArgs{"id": tenantConfigID},
+	).Scan(&result.ContactEmail, &result.AppName, &result.EmailSentAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apierrors.ErrNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("could not query build mail recipient: %w", err)
+	}
+	return &result, nil
+}
+
+// SetTenantBuildDownloadToken stores the SHA-256 of a new download token, replacing the previous one, for a record
+// whose build succeeded and whose mail has not been accepted yet. It returns apierrors.ErrConflict otherwise.
+func SetTenantBuildDownloadToken(
+	ctx context.Context, id uuid.UUID, tokenHash []byte, expiresAt time.Time,
+) error {
+	db := internalctx.GetDb(ctx)
+	tag, err := db.Exec(ctx,
+		`UPDATE TenantConfig SET download_token_hash = @hash, download_token_expires_at = @expiresAt
+		WHERE id = @id AND build_status = @succeeded AND build_email_sent_at IS NULL`,
+		pgx.NamedArgs{
+			"id": id, "hash": tokenHash, "expiresAt": expiresAt, "succeeded": types.TenantBuildStatusSucceeded,
+		})
+	if err != nil {
+		return fmt.Errorf("could not store download token: %w", err)
+	} else if tag.RowsAffected() == 0 {
+		return apierrors.ErrConflict
+	}
+	return nil
+}
+
+// MarkTenantBuildEmailSent records that Novu accepted the mail.
+func MarkTenantBuildEmailSent(ctx context.Context, id uuid.UUID) error {
+	db := internalctx.GetDb(ctx)
+	if _, err := db.Exec(ctx,
+		`UPDATE TenantConfig SET build_email_sent_at = now() WHERE id = @id`,
+		pgx.NamedArgs{"id": id},
+	); err != nil {
+		return fmt.Errorf("could not record that the build mail was sent: %w", err)
+	}
+	return nil
+}
+
+// GetTenantConfigByDownloadToken returns the record of a succeeded build whose download token has the given hash
+// and has not expired. It returns apierrors.ErrNotFound otherwise, without saying which of those it was.
+func GetTenantConfigByDownloadToken(ctx context.Context, tokenHash []byte) (*types.TenantConfig, error) {
+	db := internalctx.GetDb(ctx)
+	rows, err := db.Query(ctx,
+		`SELECT`+tenantConfigOutputExpr+`
+		FROM TenantConfig tc
+		WHERE tc.download_token_hash = @hash
+			AND tc.download_token_expires_at > now()
+			AND tc.build_status = @succeeded
+			AND tc.release_repository IS NOT NULL`,
+		pgx.NamedArgs{"hash": tokenHash, "succeeded": types.TenantBuildStatusSucceeded})
+	if err != nil {
+		return nil, fmt.Errorf("could not query TenantConfig by download token: %w", err)
+	}
+	result, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[types.TenantConfig])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apierrors.ErrNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("could not query TenantConfig by download token: %w", err)
 	}
 	return &result, nil
 }

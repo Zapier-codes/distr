@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -60,6 +61,7 @@ var (
 	supportEmail                          *string
 	storeappBuild                         *StoreappBuildConfig
 	storeappBuildConfigToken              *string
+	novu                                  *NovuConfig
 	registryEnabled                       bool
 	registryS3Config                      S3Config
 	registryScratchDir                    *string
@@ -187,6 +189,7 @@ func Initialize() {
 	}
 	storeappBuild = parseStoreappBuildConfig()
 	storeappBuildConfigToken = parseStoreappBuildConfigToken()
+	novu = parseNovuConfig()
 	inviteTokenValidDuration = envutil.GetEnvParsedOrDefault(
 		"INVITE_TOKEN_VALID_DURATION", envparse.PositiveDuration, 24*time.Hour,
 	)
@@ -561,6 +564,12 @@ func StoreappBuildConfigToken() *string {
 	return storeappBuildConfigToken
 }
 
+// Novu is where the mail about a finished tenant build is handed off, or nil when it is not configured. Without it
+// a finished build is recorded and no mail is sent.
+func Novu() *NovuConfig {
+	return novu
+}
+
 func SupportEmail() *string {
 	return supportEmail
 }
@@ -901,4 +910,36 @@ func parseStoreappBuildConfigToken() *string {
 		return nil
 	}
 	return &token
+}
+
+// NovuConfig says where the "your app is ready" mail is handed off: one workflow of one Novu instance, triggered
+// with the Novu REST API.
+type NovuConfig struct {
+	// APIKey is the secret key of the Novu environment. It is only ever sent to APIURL.
+	APIKey string
+	// APIURL is the base URL of the Novu API, without a trailing slash.
+	APIURL string
+	// BuildReadyWorkflowID is the identifier of the Novu workflow that mails the download link.
+	BuildReadyWorkflowID string
+}
+
+// parseNovuConfig reads NOVU_API_KEY, NOVU_API_URL (default https://api.novu.co) and NOVU_BUILD_READY_WORKFLOW_ID
+// (default tenant-build-ready). The key is what switches the hand-off on; a URL that is not http(s) with a host
+// disables it, with a warning, rather than sending the key to a place that can only fail.
+func parseNovuConfig() *NovuConfig {
+	key := envutil.GetEnv("NOVU_API_KEY")
+	if key == "" {
+		return nil
+	}
+	opts := envutil.GetEnvOpts{}
+	config := &NovuConfig{
+		APIKey:               key,
+		APIURL:               strings.TrimRight(envutil.GetEnvOrDefault("NOVU_API_URL", "https://api.novu.co", opts), "/"),
+		BuildReadyWorkflowID: envutil.GetEnvOrDefault("NOVU_BUILD_READY_WORKFLOW_ID", "tenant-build-ready", opts),
+	}
+	if u, err := url.Parse(config.APIURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		fmt.Fprintln(os.Stderr, "WARNING: NOVU_API_URL must be an http(s) URL, the mail about finished builds has been disabled")
+		return nil
+	}
+	return config
 }

@@ -301,6 +301,7 @@ func PublicRouter(tracers *tracers.Tracers) func(r chiopenapi.Router) {
 		r.Route("/tenant-logos", handlers.PublicTenantLogosRouter)
 		r.Route("/build-config", handlers.PublicBuildConfigRouter)
 		r.Route("/build-status", handlers.PublicBuildStatusRouter)
+		r.Route("/build-downloads", handlers.PublicBuildDownloadsRouter)
 	}
 }
 
