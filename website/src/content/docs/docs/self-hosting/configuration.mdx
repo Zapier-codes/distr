@@ -121,6 +121,13 @@ workflow's repository. Generate it with `openssl rand -hex 32`. Without the vari
 everyone, and so does a value shorter than 32 characters, with a warning in the log. The endpoint only answers while the
 build of the record is running, which is after the dispatch has started it, and answers `409` otherwise.
 
+When the run ends, the workflow reports it with `POST /api/public/v1/build-status` and the same bearer token. The body is
+`{"tenant_config_id": "...", "status": "succeeded", "asset": {"repository": "owner/name", "release_id": 1, "asset_id": 2}}`,
+or `{"tenant_config_id": "...", "status": "failed", "message": "..."}`. The asset is given by identifiers, never by
+URL, and its repository has to be `STOREAPP_BUILD_REPOSITORY`. The report only applies to a record that is building,
+and answers `409` otherwise; repeating a report that was already applied answers `204` again. Both endpoints answer
+404 unless `STOREAPP_BUILD_GITHUB_TOKEN` and `STOREAPP_BUILD_CONFIG_TOKEN` are set.
+
 | Variable                      | Required | Default | Description                                                                         |
 | ----------------------------- | -------- | ------- | ----------------------------------------------------------------------------------- |
 | `STOREAPP_BUILD_CONFIG_TOKEN` | no       | —       | Bearer token of the build-config endpoint, 32 characters or more. Keep it secret.   |

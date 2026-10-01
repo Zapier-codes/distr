@@ -39,4 +39,9 @@ type TenantConfig struct {
 	BuildStatusUpdatedAt time.Time         `db:"build_status_updated_at"`
 	// BuildStatusMessage explains a failed build. It is nil in every other state.
 	BuildStatusMessage *string `db:"build_status_message"`
+	// ReleaseRepository ("owner/name"), ReleaseID and ReleaseAssetID identify the GitHub Release asset of a
+	// succeeded build. They are nil together, and in every other state.
+	ReleaseRepository *string `db:"release_repository"`
+	ReleaseID         *int64  `db:"release_id"`
+	ReleaseAssetID    *int64  `db:"release_asset_id"`
 }

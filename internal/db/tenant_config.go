@@ -15,7 +15,8 @@ import (
 const tenantConfigOutputExpr = `
 	tc.id, tc.created_at, tc.tenant_id, tc.product_service_id, tc.display_name, tc.primary_color_hex,
 	tc.logo, tc.logo_content_type, tc.logo_sha256, tc.cdn_base, tc.catalog_index_base_url, tc.domains,
-	tc.sequence, tc.build_status, tc.build_status_updated_at, tc.build_status_message
+	tc.sequence, tc.build_status, tc.build_status_updated_at, tc.build_status_message,
+	tc.release_repository, tc.release_id, tc.release_asset_id
 `
 
 // CreateTenantConfig inserts a record in the state awaiting_gate. It returns apierrors.ErrAlreadyExists when the
@@ -123,6 +124,46 @@ func TransitionTenantBuildStatus(
 		return nil, apierrors.ErrConflict
 	} else if err != nil {
 		return nil, fmt.Errorf("could not update TenantConfig build status: %w", err)
+	}
+	return &result, nil
+}
+
+// CompleteTenantBuild ends a running build, in a single statement, so that of several reports racing for the same
+// record exactly one wins. to is succeeded, with the release asset, or failed, with the reason. It returns
+// apierrors.ErrConflict when the record is not building, or does not exist.
+func CompleteTenantBuild(
+	ctx context.Context, id uuid.UUID, to types.TenantBuildStatus, message *string,
+	repository string, releaseID, releaseAssetID int64,
+) (*types.TenantConfig, error) {
+	var repositoryArg *string
+	var releaseIDArg, releaseAssetIDArg *int64
+	if to == types.TenantBuildStatusSucceeded {
+		repositoryArg, releaseIDArg, releaseAssetIDArg = &repository, &releaseID, &releaseAssetID
+	}
+
+	db := internalctx.GetDb(ctx)
+	rows, err := db.Query(ctx,
+		`UPDATE TenantConfig AS tc SET
+			build_status = @to,
+			build_status_message = @message,
+			build_status_updated_at = now(),
+			release_repository = @repository,
+			release_id = @releaseId,
+			release_asset_id = @releaseAssetId
+		WHERE tc.id = @id AND tc.build_status = @building
+		RETURNING`+tenantConfigOutputExpr,
+		pgx.NamedArgs{
+			"id": id, "to": to, "message": message, "building": types.TenantBuildStatusBuilding,
+			"repository": repositoryArg, "releaseId": releaseIDArg, "releaseAssetId": releaseAssetIDArg,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("could not complete TenantConfig build: %w", err)
+	}
+	result, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[types.TenantConfig])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apierrors.ErrConflict
+	} else if err != nil {
+		return nil, fmt.Errorf("could not complete TenantConfig build: %w", err)
 	}
 	return &result, nil
 }
