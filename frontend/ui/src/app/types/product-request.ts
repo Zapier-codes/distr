@@ -8,6 +8,13 @@ export interface ProductServiceMediaItem {
   caption?: string;
 }
 
+export interface ProductPrice {
+  // In the minor unit of the currency (kobo, cents).
+  amountMinor: number;
+  // ISO 4217 code.
+  currency: string;
+}
+
 export interface ProductService {
   id: string;
   slug: string;
@@ -15,6 +22,8 @@ export interface ProductService {
   name: string;
   summary: string;
   description: string;
+  // Absent while the product has no price, and such a product cannot be paid for.
+  price?: ProductPrice;
   media: ProductServiceMediaItem[];
 }
 
@@ -45,4 +54,10 @@ export interface ProductRequest {
   tenantId: string;
   buildStatus: TenantBuildStatus;
   gate: ProductRequestGate;
+  // The page that takes the payment, when the request has to be paid for and one could be made.
+  paymentUrl?: string;
+}
+
+export interface ProductRequestPayment {
+  paymentUrl: string;
 }

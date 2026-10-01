@@ -31,6 +31,10 @@ type ProductService struct {
 	Description string             `db:"description"`
 	Active      bool               `db:"active"`
 	SortOrder   int                `db:"sort_order"`
+	// PriceMinor and PriceCurrency are the one-time price in the minor unit of the currency, both nil while the
+	// product has no price. A product without a price cannot be paid for.
+	PriceMinor    *int    `db:"price_minor"`
+	PriceCurrency *string `db:"price_currency"`
 	// Media is filled by a separate query, not by the row.
 	Media []ProductServiceMedia `db:"-"`
 }

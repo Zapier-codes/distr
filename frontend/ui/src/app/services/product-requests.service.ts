@@ -1,7 +1,7 @@
 import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {Observable} from 'rxjs';
-import {CreateProductRequestRequest, ProductRequest, ProductService} from '../types/product-request';
+import {CreateProductRequestRequest, ProductRequest, ProductRequestPayment, ProductService} from '../types/product-request';
 
 const publicBaseUrl = '/api/public/v1';
 
@@ -23,5 +23,13 @@ export class ProductRequestsService {
 
   public submit(request: CreateProductRequestRequest): Observable<ProductRequest> {
     return this.httpClient.post<ProductRequest>(`${publicBaseUrl}/product-requests`, request);
+  }
+
+  /** The payment page of a request that has to be paid for. The request id is the reference of the submission. */
+  public payment(requestId: string): Observable<ProductRequestPayment> {
+    return this.httpClient.post<ProductRequestPayment>(
+      `${publicBaseUrl}/product-requests/${encodeURIComponent(requestId)}/payment`,
+      {}
+    );
   }
 }

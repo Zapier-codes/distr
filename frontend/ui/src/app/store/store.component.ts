@@ -1,3 +1,4 @@
+import {formatPrice} from '../../util/price';
 import {Component, computed, inject} from '@angular/core';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {RouterLink} from '@angular/router';
@@ -11,6 +12,7 @@ import {ProductService} from '../types/product-request';
 interface ProductCard {
   product: ProductService;
   cover?: string;
+  price?: string;
 }
 
 /** The public storefront: every product a visitor can request, without an account. */
@@ -35,7 +37,11 @@ export class StoreComponent {
     const products = this.products();
     // Keep null (failed) and undefined (loading) apart from a list.
     return products
-      ? products.map((product) => ({product, cover: product.media.find((m) => m.kind === 'screenshot')?.url}))
+      ? products.map((product) => ({
+          product,
+          cover: product.media.find((m) => m.kind === 'screenshot')?.url,
+          price: product.price ? formatPrice(product.price) : undefined,
+        }))
       : products;
   });
 }

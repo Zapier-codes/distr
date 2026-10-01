@@ -66,6 +66,14 @@ services:
         sync: false # >= 32 chars; the same value as Storeapp's STOREAPP_BUILD_CONFIG_TOKEN repository secret
       - key: DEVICE_FINGERPRINT_SALT
         sync: false # >= 32 random chars; changing it forgets every free claim, so never rotate it
+      - key: BPAY_API_URL
+        sync: false # B-Pay (Zapier-codes' own payment gateway), f.xiii
+      - key: BPAY_API_KEY
+        sync: false
+      - key: BPAY_WEBHOOK_SECRET
+        sync: false # >= 16 chars; the payment response hash key of the B-Pay business profile
+      - key: BPAY_PROFILE_ID
+        sync: false # optional
       - key: TURNSTILE_SITE_KEY
         sync: false
       - key: TURNSTILE_SECRET

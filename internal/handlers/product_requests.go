@@ -8,16 +8,19 @@ import (
 
 	"github.com/distr-sh/distr/api"
 	"github.com/distr-sh/distr/internal/apierrors"
+	"github.com/distr-sh/distr/internal/bpay"
 	"github.com/distr-sh/distr/internal/buildtrigger"
 	internalctx "github.com/distr-sh/distr/internal/context"
 	"github.com/distr-sh/distr/internal/db"
 	"github.com/distr-sh/distr/internal/devicefingerprint"
 	"github.com/distr-sh/distr/internal/env"
 	"github.com/distr-sh/distr/internal/mapping"
+	"github.com/distr-sh/distr/internal/productpayment"
 	"github.com/distr-sh/distr/internal/tenantconfig"
 	"github.com/distr-sh/distr/internal/turnstile"
 	"github.com/distr-sh/distr/internal/types"
 	"github.com/getsentry/sentry-go"
+	"github.com/google/uuid"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
 	"github.com/oaswrap/spec/adapter/chiopenapi"
@@ -40,6 +43,10 @@ func PublicProductRequestsRouter(r chiopenapi.Router) {
 			"No user, organization or customer organization is created or required")).
 		With(option.Request(api.CreateProductRequestRequest{})).
 		With(option.Response(http.StatusCreated, api.ProductRequest{}))
+	r.Post("/{id}/payment", getProductRequestPaymentHandler).
+		With(option.Description("Get the payment page of a request that has to be paid for, creating the payment if " +
+			"it does not exist yet. The request id is the reference given when it was submitted")).
+		With(option.Response(http.StatusOK, api.ProductRequestPayment{}))
 }
 
 // PublicProductServicesRouter serves the storefront catalog.
@@ -138,11 +145,70 @@ func createProductRequestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var paymentURL *string
 	if gate == types.ProductRequestGateFree && service.Type == types.ProductServiceTypeApp {
 		createdTenant = dispatchFreeBuild(ctx, createdTenant)
+	} else if gate == types.ProductRequestGatePaymentRequired {
+		// The request is registered either way. When no payment page can be made now, the requester asks for it again
+		// through the payment endpoint, or the operator sees an awaiting_gate record.
+		if link, err := productpayment.EnsurePaymentLink(ctx, createdTenant, service); err == nil {
+			paymentURL = &link
+		} else if !errors.Is(err, productpayment.ErrNoPrice) && !errors.Is(err, bpay.ErrNotConfigured) {
+			log.Warn("could not create the payment of a product request",
+				zap.String("tenantId", createdTenant.TenantID), zap.Error(err))
+		}
 	}
 
-	RespondJSONWithStatus(w, http.StatusCreated, mapping.ProductRequestToAPI(*createdRequest, *createdTenant, gate))
+	RespondJSONWithStatus(w, http.StatusCreated,
+		mapping.ProductRequestToAPI(*createdRequest, *createdTenant, gate, paymentURL))
+}
+
+func getProductRequestPaymentHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := internalctx.GetLogger(ctx)
+
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "that request does not exist", http.StatusNotFound)
+		return
+	}
+	request, err := db.GetProductRequest(ctx, id)
+	if err == nil && request.TenantConfigID == nil {
+		err = apierrors.ErrNotFound
+	}
+	var tenant *types.TenantConfig
+	var service *types.ProductService
+	if err == nil {
+		tenant, _, err = db.GetTenantConfigForBuild(ctx, *request.TenantConfigID)
+	}
+	if err == nil {
+		service, err = db.GetActiveProductServiceByID(ctx, tenant.ProductServiceID)
+	}
+	if errors.Is(err, apierrors.ErrNotFound) {
+		http.Error(w, "that request does not exist", http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Warn("could not load a product request for payment", zap.Error(err))
+		sentry.GetHubFromContext(ctx).CaptureException(err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	link, err := productpayment.EnsurePaymentLink(ctx, tenant, service)
+	switch {
+	case err == nil:
+		RespondJSON(w, api.ProductRequestPayment{PaymentURL: link})
+	case errors.Is(err, productpayment.ErrNotAwaitingPayment):
+		http.Error(w, "this request does not need a payment, or has been paid already", http.StatusConflict)
+	case errors.Is(err, productpayment.ErrNoPrice), errors.Is(err, bpay.ErrNotConfigured):
+		http.Error(w, "paying for this product is not possible yet, we will contact you", http.StatusConflict)
+	default:
+		log.Warn("could not create the payment of a product request",
+			zap.String("tenantId", tenant.TenantID), zap.Error(err))
+		sentry.GetHubFromContext(ctx).CaptureException(err)
+		http.Error(w, "the payment service could not be reached, please try again in a moment",
+			http.StatusBadGateway)
+	}
 }
 
 // applyFreeTierGate is the free/paid check (f.xii). A request is free when the instance has a salt, the browser sent

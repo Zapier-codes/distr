@@ -171,6 +171,31 @@ or device gets around it. Describe the check in your privacy notice before you e
 | ------------------------- | -------- | ------- | ------------------------------------------------------------------------------------ |
 | `DEVICE_FINGERPRINT_SALT` | no       | —       | Key of the fingerprint hash, 32 characters or more. Keep it secret and never change it. |
 
+### Paid products
+
+A request the free tier did not cover is paid for once, per product, through B-Pay, Zapier-codes' own payment gateway.
+Distr creates a payment with a payment link at `BPAY_API_URL` (`POST /payments`, `api-key` header) and gives the
+requester that page; Distr never names or calls a payment processor. The payment is created with the amount and currency
+of the product at that moment, and no personal data is sent: the metadata holds only the id of the tenant record.
+
+B-Pay calls `POST /api/public/v1/bpay-webhook` when a payment succeeds. The request is only believed when its
+`X-Webhook-Signature-512` header is the HMAC-SHA512 of the body under `BPAY_WEBHOOK_SECRET`, which has to be the payment
+response hash key of the B-Pay business profile; even then Distr retrieves the payment from B-Pay and requires it to be
+`succeeded` for exactly the stored amount and currency before the build is queued. Without all three of
+`BPAY_API_URL`, `BPAY_API_KEY` and `BPAY_WEBHOOK_SECRET` the endpoint answers 404, no payment page is created and
+those requests stay `awaiting_gate`.
+
+A product's price is `price_minor` (kobo, cents) and `price_currency` (ISO 4217) on its `ProductService` row, and is
+unset by default; a product without a price cannot be paid for. There is no operator screen yet, so set it with SQL:
+`UPDATE ProductService SET price_minor = 500000, price_currency = 'NGN' WHERE slug = 'branded-app-store';`
+
+| Variable              | Required | Default | Description                                                                         |
+| --------------------- | -------- | ------- | ----------------------------------------------------------------------------------- |
+| `BPAY_API_URL`        | no       | —       | Base URL of the B-Pay API.                                                          |
+| `BPAY_API_KEY`        | no       | —       | Secret API key of the B-Pay merchant account. Keep it secret.                       |
+| `BPAY_WEBHOOK_SECRET` | no       | —       | Key B-Pay signs its webhooks with, 16 characters or more. Keep it secret.           |
+| `BPAY_PROFILE_ID`     | no       | —       | B-Pay business profile to create payments under, the merchant default when unset.   |
+
 ## Agents
 
 | Variable              | Required | Default | Description                                                                                                                                                                                                                                                                                 |

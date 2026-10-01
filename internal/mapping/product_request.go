@@ -9,7 +9,7 @@ import (
 )
 
 func ProductRequestToAPI(
-	request types.ProductRequest, tenant types.TenantConfig, gate types.ProductRequestGate,
+	request types.ProductRequest, tenant types.TenantConfig, gate types.ProductRequestGate, paymentURL *string,
 ) api.ProductRequest {
 	return api.ProductRequest{
 		ID:          request.ID,
@@ -17,6 +17,7 @@ func ProductRequestToAPI(
 		TenantID:    tenant.TenantID,
 		BuildStatus: tenant.BuildStatus,
 		Gate:        gate,
+		PaymentURL:  paymentURL,
 	}
 }
 

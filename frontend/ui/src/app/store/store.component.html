@@ -37,6 +37,9 @@
               </span>
               <h2 class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ product.name }}</h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ product.summary }}</p>
+              @if (card.price; as price) {
+                <p class="mt-3 text-sm font-semibold text-gray-900 dark:text-white">{{ price }}</p>
+              }
             </div>
           </a>
         }

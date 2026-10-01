@@ -63,6 +63,7 @@ var (
 	storeappBuildConfigToken              *string
 	novu                                  *NovuConfig
 	deviceFingerprintSalt                 *string
+	bpay                                  *BPayConfig
 	registryEnabled                       bool
 	registryS3Config                      S3Config
 	registryScratchDir                    *string
@@ -192,6 +193,7 @@ func Initialize() {
 	storeappBuildConfigToken = parseStoreappBuildConfigToken()
 	novu = parseNovuConfig()
 	deviceFingerprintSalt = parseDeviceFingerprintSalt()
+	bpay = parseBPayConfig()
 	inviteTokenValidDuration = envutil.GetEnvParsedOrDefault(
 		"INVITE_TOKEN_VALID_DURATION", envparse.PositiveDuration, 24*time.Hour,
 	)
@@ -572,6 +574,12 @@ func Novu() *NovuConfig {
 	return novu
 }
 
+// BPay is the billing service the one-time charges go through, or nil when it is not configured. Without it a request
+// the free tier did not cover has no payment page and stays awaiting_gate.
+func BPay() *BPayConfig {
+	return bpay
+}
+
 // DeviceFingerprintSalt is the key the free-tier gate hashes device fingerprints with, or nil when it is not
 // configured. Without it no request is free: every one stays awaiting_gate.
 func DeviceFingerprintSalt() *string {
@@ -918,6 +926,53 @@ func parseStoreappBuildConfigToken() *string {
 		return nil
 	}
 	return &token
+}
+
+// MinBPayWebhookSecretLength is the shortest BPAY_WEBHOOK_SECRET that is accepted.
+const MinBPayWebhookSecretLength = 16
+
+// BPayConfig says how Distr reaches B-Pay (Zapier-codes' own payment gateway, a Hyperswitch deployment), which hides
+// the payment rails behind it: the API to create and retrieve a payment, and the key its webhooks are signed with.
+type BPayConfig struct {
+	// APIURL is the base URL of the B-Pay API, without a trailing slash.
+	APIURL string
+	// APIKey is the secret API key of the B-Pay merchant account. It is only ever sent to APIURL.
+	APIKey string
+	// WebhookSecret is the key B-Pay signs its webhooks with (the payment response hash key of the business profile).
+	WebhookSecret string
+	// ProfileID is the B-Pay business profile payments are created under, nil to use the merchant's default.
+	ProfileID *string
+}
+
+// parseBPayConfig reads BPAY_API_URL, BPAY_API_KEY, BPAY_WEBHOOK_SECRET (all three or none) and the optional
+// BPAY_PROFILE_ID. A half-set group, a URL that is not http(s) with a host, or a webhook secret under
+// MinBPayWebhookSecretLength disables payments, with a warning, rather than sending a key to a place that can only
+// fail or accepting a webhook that anyone could forge.
+func parseBPayConfig() *BPayConfig {
+	apiURL := strings.TrimRight(envutil.GetEnv("BPAY_API_URL"), "/")
+	apiKey := envutil.GetEnv("BPAY_API_KEY")
+	secret := envutil.GetEnv("BPAY_WEBHOOK_SECRET")
+	if apiURL == "" && apiKey == "" && secret == "" {
+		return nil
+	}
+	if apiURL == "" || apiKey == "" || secret == "" {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: BPAY_API_URL, BPAY_API_KEY and BPAY_WEBHOOK_SECRET must all be set, payments have been disabled")
+		return nil
+	}
+	if u, err := url.Parse(apiURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		fmt.Fprintln(os.Stderr, "WARNING: BPAY_API_URL must be an http(s) URL, payments have been disabled")
+		return nil
+	}
+	if len(secret) < MinBPayWebhookSecretLength {
+		fmt.Fprintln(os.Stderr, "WARNING: BPAY_WEBHOOK_SECRET must be at least 16 characters, payments have been disabled")
+		return nil
+	}
+	config := &BPayConfig{APIURL: apiURL, APIKey: apiKey, WebhookSecret: secret}
+	if profileID := envutil.GetEnv("BPAY_PROFILE_ID"); profileID != "" {
+		config.ProfileID = &profileID
+	}
+	return config
 }
 
 // MinDeviceFingerprintSaltLength is the shortest DEVICE_FINGERPRINT_SALT that is accepted. The salt is the only thing

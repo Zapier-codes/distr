@@ -6,6 +6,10 @@ import (
 )
 
 func ProductServiceToAPI(service types.ProductService) api.ProductService {
+	var price *api.ProductPrice
+	if service.PriceMinor != nil && service.PriceCurrency != nil {
+		price = &api.ProductPrice{AmountMinor: *service.PriceMinor, Currency: *service.PriceCurrency}
+	}
 	return api.ProductService{
 		ID:          service.ID,
 		Slug:        service.Slug,
@@ -13,6 +17,7 @@ func ProductServiceToAPI(service types.ProductService) api.ProductService {
 		Name:        service.Name,
 		Summary:     service.Summary,
 		Description: service.Description,
+		Price:       price,
 		Media:       List(service.Media, ProductServiceMediaToAPI),
 	}
 }

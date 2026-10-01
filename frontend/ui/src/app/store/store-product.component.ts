@@ -5,6 +5,7 @@ import {ActivatedRoute, RouterLink} from '@angular/router';
 import {catchError, firstValueFrom, map, of, switchMap} from 'rxjs';
 import {deviceFingerprint} from '../../util/device-fingerprint';
 import {getFormDisplayedError} from '../../util/errors';
+import {formatPrice} from '../../util/price';
 import {PortalLogoComponent} from '../components/portal-logo/portal-logo.component';
 import {TurnstileComponent} from '../components/turnstile.component';
 import {AutotrimDirective} from '../directives/autotrim.directive';
@@ -53,7 +54,14 @@ export class StoreProductComponent {
     themeColor: new FormControl('#2563eb', [Validators.required, Validators.pattern(/^#[0-9a-fA-F]{6}$/)]),
   });
 
+  protected readonly price = computed(() => {
+    const price = this.product()?.price;
+    return price ? formatPrice(price) : undefined;
+  });
+
   protected readonly loading = signal(false);
+  // The payment page of the submitted request, once it exists.
+  protected readonly paymentUrl = signal<string | undefined>(undefined);
   protected readonly submitted = signal<ProductRequest | undefined>(undefined);
 
   protected readonly icon = signal<ProductRequestIcon | undefined>(undefined);
@@ -111,19 +119,19 @@ export class StoreProductComponent {
     this.loading.set(true);
     const value = this.form.getRawValue();
     try {
-      this.submitted.set(
-        await firstValueFrom(
-          this.service.submit({
-            contactEmail: value.contactEmail!,
-            appName: value.appName!,
-            productServiceId: product.id,
-            themeColor: value.themeColor!,
-            icon: this.icon(),
-            turnstileToken,
-            deviceFingerprint: await deviceFingerprint(),
-          })
-        )
+      const result = await firstValueFrom(
+        this.service.submit({
+          contactEmail: value.contactEmail!,
+          appName: value.appName!,
+          productServiceId: product.id,
+          themeColor: value.themeColor!,
+          icon: this.icon(),
+          turnstileToken,
+          deviceFingerprint: await deviceFingerprint(),
+        })
       );
+      this.paymentUrl.set(result.paymentUrl);
+      this.submitted.set(result);
     } catch (e) {
       const error = getFormDisplayedError(e);
       if (error) {
@@ -131,6 +139,25 @@ export class StoreProductComponent {
       }
       // A token can only be redeemed once, so a retry needs a new challenge.
       this.turnstile()?.reset();
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  /** Asks for the payment page again, for a request whose page could not be made when it was submitted. */
+  protected async preparePayment(): Promise<void> {
+    const request = this.submitted();
+    if (!request) {
+      return;
+    }
+    this.loading.set(true);
+    try {
+      this.paymentUrl.set((await firstValueFrom(this.service.payment(request.id))).paymentUrl);
+    } catch (e) {
+      const error = getFormDisplayedError(e);
+      if (error) {
+        this.toast.error(error);
+      }
     } finally {
       this.loading.set(false);
     }

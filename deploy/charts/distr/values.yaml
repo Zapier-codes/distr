@@ -173,6 +173,14 @@ distr:
     # Without it the build-config endpoint does not exist. Use the same value as the workflow's secret.
     # - name: STOREAPP_BUILD_CONFIG_TOKEN
     #   value: ''
+    # B-Pay, the payment gateway the one-time charges go through. All three or none. See
+    # website/src/content/docs/docs/self-hosting/configuration.mdx ("Paid products").
+    # - name: BPAY_API_URL
+    #   value: ''
+    # - name: BPAY_API_KEY
+    #   value: ''
+    # - name: BPAY_WEBHOOK_SECRET
+    #   value: ''
     # Key of the device-fingerprint hash behind the one-free-product-per-device check, at least 32 random characters.
     # Without it no request is free. Never change it once set.
     # - name: DEVICE_FINGERPRINT_SALT

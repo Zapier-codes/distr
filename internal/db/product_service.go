@@ -14,7 +14,8 @@ import (
 
 const (
 	productServiceOutputExpr = `
-		ps.id, ps.created_at, ps.slug, ps.type, ps.name, ps.summary, ps.description, ps.active, ps.sort_order
+		ps.id, ps.created_at, ps.slug, ps.type, ps.name, ps.summary, ps.description, ps.active, ps.sort_order,
+		ps.price_minor, ps.price_currency
 	`
 	productServiceMediaOutputExpr = `
 		psm.id, psm.product_service_id, psm.kind, psm.url, psm.caption, psm.sort_order

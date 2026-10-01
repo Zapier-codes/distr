@@ -118,4 +118,12 @@ type ProductRequest struct {
 	// Gate is free when the request used the free product of its device, and payment_required when it has to be paid
 	// for before anything is built.
 	Gate types.ProductRequestGate `json:"gate"`
+	// PaymentURL is the B-Pay page that takes the payment. It is set when the request has to be paid for, the product
+	// has a price and B-Pay accepted the payment, and absent otherwise (ask for it again with the payment endpoint).
+	PaymentURL *string `json:"paymentUrl,omitempty"`
+}
+
+// ProductRequestPayment is the answer of the payment endpoint of a request.
+type ProductRequestPayment struct {
+	PaymentURL string `json:"paymentUrl"`
 }

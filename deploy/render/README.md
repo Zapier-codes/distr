@@ -19,6 +19,7 @@ Written, **not applied, not deployed, not run**. Everything below is the intende
    - `STOREAPP_BUILD_GITHUB_TOKEN`: fine-grained token on the Storeapp repository only, **Actions: read and write** and **Contents: read** (`f.iii` and `f.v` flagged both).
    - `STOREAPP_BUILD_CONFIG_TOKEN`: at least 32 characters, the same value as the Storeapp repository secret of that name.
    - `DEVICE_FINGERPRINT_SALT`: at least 32 random characters (`openssl rand -hex 32`). Without it no request is free (`f.xii`); changing it later forgets every free claim.
+   - `BPAY_API_URL` / `BPAY_API_KEY` / `BPAY_WEBHOOK_SECRET` (all three or none; `BPAY_PROFILE_ID` optional): B-Pay, the payment gateway (`f.xiii`). In B-Pay, point the business profile's webhook at `https://<DISTR_HOST>/api/public/v1/bpay-webhook` and use its payment response hash key as `BPAY_WEBHOOK_SECRET`. Then set a price on each product (see `configuration.mdx`, "Paid products"), or no request can be paid for.
    - `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET` (set both or neither), and `NOVU_API_KEY` (plus `NOVU_API_URL` for the EU region or a self-hosted Novu) from distr's own Novu instance, provisioned by `deploy/novu/README.md` (`f.xi`); that file also has the check that confirms a mail is sent.
 5. Copy the service's **Deploy Hook** URL into the GitHub repository secret `RENDER_DEPLOY_HOOK_URL`. Pushes then deploy.
 6. Check `https://<DISTR_HOST>/ready` answers 200, then `/store`.
