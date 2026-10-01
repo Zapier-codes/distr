@@ -160,6 +160,15 @@ distr:
     # Address the frontend links to where it mentions support. Without it support is not a link.
     # - name: SUPPORT_EMAIL
     #   value: 'support@example.local'
+    # Dispatch tenant app builds to a GitHub Actions workflow. Without the token no build is dispatched.
+    # - name: STOREAPP_BUILD_GITHUB_TOKEN
+    #   value: ''
+    # - name: STOREAPP_BUILD_REPOSITORY
+    #   value: 'Zapier-codes/Storeapp'
+    # - name: STOREAPP_BUILD_WORKFLOW
+    #   value: 'build-tenant-apk.yml'
+    # - name: STOREAPP_BUILD_REF
+    #   value: 'main'
     - name: USER_EMAIL_VERIFICATION_REQUIRED
       value: 'false'
     - name: METRICS_ENTRIES_MAX_AGE

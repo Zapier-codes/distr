@@ -97,6 +97,24 @@ the widget and are not verified; they remain subject to the rate limits of the a
 | `TURNSTILE_SITE_KEY` | if `TURNSTILE_SECRET`   | —       | Public site key of the Turnstile widget, rendered on the registration form.        |
 | `TURNSTILE_SECRET`   | if `TURNSTILE_SITE_KEY` | —       | Secret key used to verify tokens with Cloudflare's siteverify API. Keep it secret. |
 
+## Tenant App Builds
+
+An app requested through the public storefront is built by a GitHub Actions workflow that Distr starts with a
+`workflow_dispatch` call, passing the id of the tenant record as the `tenant_config_id` input. The dispatch is disabled
+unless `STOREAPP_BUILD_GITHUB_TOKEN` is set. Until then a request that is cleared for building waits in the `queued`
+state, and it is dispatched by a later call once the token is configured. Distr logs a warning and leaves the dispatch
+disabled when `STOREAPP_BUILD_REPOSITORY` is not in the form `owner/name`.
+
+Use a fine-grained token limited to the one repository, with the **Actions** repository permission set to read and
+write. The token is only ever sent to `api.github.com`.
+
+| Variable                      | Required | Default                 | Description                                                    |
+| ----------------------------- | -------- | ----------------------- | -------------------------------------------------------------- |
+| `STOREAPP_BUILD_GITHUB_TOKEN` | no       | —                       | GitHub token that may start the workflow. Keep it secret.      |
+| `STOREAPP_BUILD_REPOSITORY`   | no       | `Zapier-codes/Storeapp` | Repository of the workflow, as `owner/name`.                   |
+| `STOREAPP_BUILD_WORKFLOW`     | no       | `build-tenant-apk.yml`  | File name of the workflow in `.github/workflows`.              |
+| `STOREAPP_BUILD_REF`          | no       | `main`                  | Branch or tag the workflow runs from.                          |
+
 ## Agents
 
 | Variable              | Required | Default | Description                                                                                                                                                                                                                                                                                 |

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +58,7 @@ var (
 	turnstileSiteKey                      *string
 	turnstileSecret                       *string
 	supportEmail                          *string
+	storeappBuild                         *StoreappBuildConfig
 	registryEnabled                       bool
 	registryS3Config                      S3Config
 	registryScratchDir                    *string
@@ -182,6 +184,7 @@ func Initialize() {
 	if email := envutil.GetEnv("SUPPORT_EMAIL"); email != "" {
 		supportEmail = &email
 	}
+	storeappBuild = parseStoreappBuildConfig()
 	inviteTokenValidDuration = envutil.GetEnvParsedOrDefault(
 		"INVITE_TOKEN_VALID_DURATION", envparse.PositiveDuration, 24*time.Hour,
 	)
@@ -544,6 +547,12 @@ func TurnstileSecret() *string {
 	return turnstileSecret
 }
 
+// StoreappBuild is the target of the tenant build dispatch, or nil when it is not configured. Without it no build
+// is ever dispatched and a request that cleared the free/paid gate waits in the queued state.
+func StoreappBuild() *StoreappBuildConfig {
+	return storeappBuild
+}
+
 func SupportEmail() *string {
 	return supportEmail
 }
@@ -825,4 +834,43 @@ func InternalServerAddr() string {
 // frontend, but answers every API request with 503 instead of letting it reach the database.
 func MaintenanceMode() bool {
 	return maintenanceMode
+}
+
+// StoreappBuildConfig says where a tenant build is dispatched: a workflow_dispatch call to one workflow of one
+// GitHub repository.
+type StoreappBuildConfig struct {
+	// Token is a GitHub token allowed to write Actions on Repository. It is only ever sent to the GitHub API.
+	Token string
+	// Repository is "owner/name".
+	Repository string
+	// Workflow is the file name of the workflow in .github/workflows.
+	Workflow string
+	// Ref is the branch or tag the workflow runs from.
+	Ref string
+}
+
+var storeappBuildRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+
+// parseStoreappBuildConfig reads STOREAPP_BUILD_GITHUB_TOKEN, STOREAPP_BUILD_REPOSITORY (default
+// Zapier-codes/Storeapp), STOREAPP_BUILD_WORKFLOW (default build-tenant-apk.yml) and STOREAPP_BUILD_REF (default
+// main). The token is what switches the dispatch on; a repository that is not owner/name disables it, with a
+// warning, rather than sending the token to a URL that can only fail.
+func parseStoreappBuildConfig() *StoreappBuildConfig {
+	token := envutil.GetEnv("STOREAPP_BUILD_GITHUB_TOKEN")
+	if token == "" {
+		return nil
+	}
+	opts := envutil.GetEnvOpts{}
+	config := &StoreappBuildConfig{
+		Token:      token,
+		Repository: envutil.GetEnvOrDefault("STOREAPP_BUILD_REPOSITORY", "Zapier-codes/Storeapp", opts),
+		Workflow:   envutil.GetEnvOrDefault("STOREAPP_BUILD_WORKFLOW", "build-tenant-apk.yml", opts),
+		Ref:        envutil.GetEnvOrDefault("STOREAPP_BUILD_REF", "main", opts),
+	}
+	if !storeappBuildRepositoryPattern.MatchString(config.Repository) {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: STOREAPP_BUILD_REPOSITORY must be owner/name, tenant build dispatch has been disabled")
+		return nil
+	}
+	return config
 }
