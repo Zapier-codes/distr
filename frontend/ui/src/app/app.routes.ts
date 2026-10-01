@@ -16,6 +16,8 @@ import {PasswordResetComponent} from './password-reset/password-reset.component'
 import {RegisterComponent} from './register/register.component';
 import {actionFlowPath, AuthService} from './services/auth.service';
 import {ToastService} from './services/toast.service';
+import {StoreProductComponent} from './store/store-product.component';
+import {StoreComponent} from './store/store.component';
 import {VerifyComponent} from './verify/verify.component';
 
 const emailVerificationGuard: CanActivateFn = async () => {
@@ -94,6 +96,9 @@ export const routes: Routes = [
   {path: 'login', component: LoginComponent},
   {path: 'register', component: RegisterComponent},
   {path: 'forgot', component: ForgotComponent},
+  // The request storefront is public: no account, so outside the guarded routes below.
+  {path: 'store', component: StoreComponent},
+  {path: 'store/:slug', component: StoreProductComponent},
   {
     path: '',
     canActivate: [jwtParamRedirectGuard, jwtAuthGuard],

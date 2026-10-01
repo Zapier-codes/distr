@@ -15,4 +15,7 @@ type ProductRequest struct {
 	AppName      string    `db:"app_name"`
 	// ThemeColor is a hex color in the form #rrggbb.
 	ThemeColor string `db:"theme_color"`
+	// TenantConfigID is the canonical tenant record created with the request. It is nil only for requests that
+	// predate the storefront.
+	TenantConfigID *uuid.UUID `db:"tenant_config_id"`
 }

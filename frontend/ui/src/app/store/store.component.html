@@ -1,0 +1,46 @@
+<section class="bg-gray-50 dark:bg-gray-900 min-h-screen">
+  <div class="px-6 py-8 mx-auto max-w-6xl">
+    <div class="flex justify-center mb-6">
+      <app-portal-logo />
+    </div>
+    <h1 class="text-2xl font-bold tracking-tight text-gray-900 md:text-3xl dark:text-white">Get your own app</h1>
+    <p class="mt-2 mb-8 text-gray-500 dark:text-gray-400">
+      Pick a product, add your name, color and icon, and request it. No account needed.
+    </p>
+
+    @let list = cards();
+    @if (list === undefined) {
+      <p class="text-gray-500 dark:text-gray-400">Loading products…</p>
+    } @else if (list === null) {
+      <p class="text-red-500">The products could not be loaded. Please reload the page.</p>
+    } @else if (list.length === 0) {
+      <p class="text-gray-500 dark:text-gray-400">There are no products available right now.</p>
+    } @else {
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        @for (card of list; track card.product.id) {
+          @let product = card.product;
+          <a
+            [routerLink]="['/store', product.slug]"
+            class="block overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md dark:bg-gray-800 dark:border-gray-700">
+            @if (card.cover) {
+              <img [src]="card.cover" [alt]="product.name + ' preview'" class="object-cover w-full h-48" loading="lazy" />
+            } @else {
+              <div class="flex items-center justify-center w-full h-48 bg-gray-100 dark:bg-gray-700">
+                <fa-icon
+                  [icon]="product.type === 'app' ? faMobileScreen : faGlobe"
+                  class="text-4xl text-gray-400 dark:text-gray-500" />
+              </div>
+            }
+            <div class="p-5">
+              <span class="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                {{ product.type === 'app' ? 'Android app' : 'Website' }}
+              </span>
+              <h2 class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ product.name }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ product.summary }}</p>
+            </div>
+          </a>
+        }
+      </div>
+    }
+  </div>
+</section>

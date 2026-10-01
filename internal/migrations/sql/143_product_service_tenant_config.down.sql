@@ -1,0 +1,6 @@
+ALTER TABLE ProductRequest DROP COLUMN tenant_config_id;
+DROP TABLE TenantConfig;
+DROP TYPE TENANT_BUILD_STATUS;
+DROP TABLE ProductServiceMedia;
+DROP TABLE ProductService;
+DROP TYPE PRODUCT_SERVICE_TYPE;
