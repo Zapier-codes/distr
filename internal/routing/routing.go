@@ -296,6 +296,7 @@ func PublicRouter(tracers *tracers.Tracers) func(r chiopenapi.Router) {
 		r.Route("/license-keys", handlers.PublicLicenseKeysRouter)
 		r.Route("/files", handlers.PublicFileRouter)
 		r.Route("/portal", handlers.PublicPortalRouter)
+		r.Route("/product-requests", handlers.PublicProductRequestsRouter)
 	}
 }
 
