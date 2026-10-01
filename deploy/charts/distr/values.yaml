@@ -169,6 +169,10 @@ distr:
     #   value: 'build-tenant-apk.yml'
     # - name: STOREAPP_BUILD_REF
     #   value: 'main'
+    # Bearer token the tenant build workflow presents to fetch the record it builds, at least 32 random characters.
+    # Without it the build-config endpoint does not exist. Use the same value as the workflow's secret.
+    # - name: STOREAPP_BUILD_CONFIG_TOKEN
+    #   value: ''
     - name: USER_EMAIL_VERIFICATION_REQUIRED
       value: 'false'
     - name: METRICS_ENTRIES_MAX_AGE

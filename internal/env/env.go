@@ -59,6 +59,7 @@ var (
 	turnstileSecret                       *string
 	supportEmail                          *string
 	storeappBuild                         *StoreappBuildConfig
+	storeappBuildConfigToken              *string
 	registryEnabled                       bool
 	registryS3Config                      S3Config
 	registryScratchDir                    *string
@@ -185,6 +186,7 @@ func Initialize() {
 		supportEmail = &email
 	}
 	storeappBuild = parseStoreappBuildConfig()
+	storeappBuildConfigToken = parseStoreappBuildConfigToken()
 	inviteTokenValidDuration = envutil.GetEnvParsedOrDefault(
 		"INVITE_TOKEN_VALID_DURATION", envparse.PositiveDuration, 24*time.Hour,
 	)
@@ -553,6 +555,12 @@ func StoreappBuild() *StoreappBuildConfig {
 	return storeappBuild
 }
 
+// StoreappBuildConfigToken is the bearer token the tenant build workflow presents to fetch the record it builds, or
+// nil when it is not configured. Without it the build-config endpoint answers 404 to everyone.
+func StoreappBuildConfigToken() *string {
+	return storeappBuildConfigToken
+}
+
 func SupportEmail() *string {
 	return supportEmail
 }
@@ -873,4 +881,24 @@ func parseStoreappBuildConfig() *StoreappBuildConfig {
 		return nil
 	}
 	return config
+}
+
+// MinStoreappBuildConfigTokenLength is the shortest STOREAPP_BUILD_CONFIG_TOKEN that is accepted. The token is the only
+// thing between the internet and the record of a tenant, and it is compared as given, so it has to be random and long.
+const MinStoreappBuildConfigTokenLength = 32
+
+// parseStoreappBuildConfigToken reads STOREAPP_BUILD_CONFIG_TOKEN. A token shorter than
+// MinStoreappBuildConfigTokenLength disables the endpoint, with a warning, rather than guarding it with something
+// that can be guessed.
+func parseStoreappBuildConfigToken() *string {
+	token := envutil.GetEnv("STOREAPP_BUILD_CONFIG_TOKEN")
+	if token == "" {
+		return nil
+	}
+	if len(token) < MinStoreappBuildConfigTokenLength {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: STOREAPP_BUILD_CONFIG_TOKEN must be at least 32 characters, the build-config endpoint has been disabled")
+		return nil
+	}
+	return &token
 }

@@ -115,6 +115,16 @@ write. The token is only ever sent to `api.github.com`.
 | `STOREAPP_BUILD_WORKFLOW`     | no       | `build-tenant-apk.yml`  | File name of the workflow in `.github/workflows`.              |
 | `STOREAPP_BUILD_REF`          | no       | `main`                  | Branch or tag the workflow runs from.                          |
 
+The workflow fetches the record it builds from `GET /api/public/v1/build-config/{tenant_config_id}`. The call needs an
+`Authorization: Bearer` header carrying `STOREAPP_BUILD_CONFIG_TOKEN`, and the same value is stored as a secret of the
+workflow's repository. Generate it with `openssl rand -hex 32`. Without the variable the endpoint answers 404 to
+everyone, and so does a value shorter than 32 characters, with a warning in the log. The endpoint only answers while the
+build of the record is running, which is after the dispatch has started it, and answers `409` otherwise.
+
+| Variable                      | Required | Default | Description                                                                         |
+| ----------------------------- | -------- | ------- | ----------------------------------------------------------------------------------- |
+| `STOREAPP_BUILD_CONFIG_TOKEN` | no       | —       | Bearer token of the build-config endpoint, 32 characters or more. Keep it secret.   |
+
 ## Agents
 
 | Variable              | Required | Default | Description                                                                                                                                                                                                                                                                                 |
