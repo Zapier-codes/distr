@@ -18,12 +18,18 @@ var buildReleaseRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z
 type BuildStatusRequest struct {
 	// TenantConfigID is the id the build was dispatched with, which the build-config answer carried back.
 	TenantConfigID uuid.UUID `json:"tenant_config_id"`
+	// BuildID is the same id under the name Zealot's harvest workflow reports it by. Either field may carry it; the
+	// handler copies it into TenantConfigID when that one is empty.
+	BuildID uuid.UUID `json:"build_id"`
 	// Status is succeeded or failed.
 	Status types.TenantBuildStatus `json:"status"`
 	// Message says why a build failed. It is ignored for a succeeded build.
 	Message *string `json:"message,omitempty"`
 	// Asset identifies the GitHub Release asset of a succeeded build. It is required then, and ignored otherwise.
 	Asset *BuildReleaseAsset `json:"asset,omitempty"`
+	// ExternalAsset is set by the handler, never read from the request: it says the binary of a succeeded build is
+	// served by Zealot, so no release asset is expected.
+	ExternalAsset bool `json:"-"`
 }
 
 // BuildReleaseAsset is a GitHub Release asset by identifiers. It is never a URL: a private repository's asset cannot
@@ -47,6 +53,9 @@ func (r *BuildStatusRequest) Validate() error {
 		return nil
 	case types.TenantBuildStatusSucceeded:
 		if r.Asset == nil {
+			if r.ExternalAsset {
+				return nil
+			}
 			return validation.NewValidationFailedError("a succeeded build needs the release asset")
 		}
 		return r.Asset.Validate()

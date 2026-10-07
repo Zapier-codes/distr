@@ -169,6 +169,33 @@ func CompleteTenantBuild(
 	return &result, nil
 }
 
+// CompleteTenantBuildExternal ends a running build as succeeded when the binary is served by Zealot (task 40n-g), so
+// there is no GitHub Release asset to record and the three release columns stay empty. It returns
+// apierrors.ErrConflict when the record is not building, or does not exist.
+func CompleteTenantBuildExternal(ctx context.Context, id uuid.UUID) (*types.TenantConfig, error) {
+	db := internalctx.GetDb(ctx)
+	rows, err := db.Query(ctx,
+		`UPDATE TenantConfig AS tc SET
+			build_status = @succeeded,
+			build_status_message = NULL,
+			build_status_updated_at = now()
+		WHERE tc.id = @id AND tc.build_status = @building
+		RETURNING`+tenantConfigOutputExpr,
+		pgx.NamedArgs{
+			"id": id, "succeeded": types.TenantBuildStatusSucceeded, "building": types.TenantBuildStatusBuilding,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("could not complete TenantConfig build: %w", err)
+	}
+	result, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[types.TenantConfig])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apierrors.ErrConflict
+	} else if err != nil {
+		return nil, fmt.Errorf("could not complete TenantConfig build: %w", err)
+	}
+	return &result, nil
+}
+
 // BuildReadyRecipient is who the mail about a finished build goes to.
 type BuildReadyRecipient struct {
 	ContactEmail string
@@ -237,8 +264,7 @@ func GetTenantConfigByDownloadToken(ctx context.Context, tokenHash []byte) (*typ
 		FROM TenantConfig tc
 		WHERE tc.download_token_hash = @hash
 			AND tc.download_token_expires_at > now()
-			AND tc.build_status = @succeeded
-			AND tc.release_repository IS NOT NULL`,
+			AND tc.build_status = @succeeded`,
 		pgx.NamedArgs{"hash": tokenHash, "succeeded": types.TenantBuildStatusSucceeded})
 	if err != nil {
 		return nil, fmt.Errorf("could not query TenantConfig by download token: %w", err)

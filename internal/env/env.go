@@ -61,6 +61,7 @@ var (
 	supportEmail                          *string
 	storeappBuild                         *StoreappBuildConfig
 	storeappBuildConfigToken              *string
+	zealotDownload                        *ZealotDownloadConfig
 	novu                                  *NovuConfig
 	deviceFingerprintSalt                 *string
 	bpay                                  *BPayConfig
@@ -191,6 +192,7 @@ func Initialize() {
 	}
 	storeappBuild = parseStoreappBuildConfig()
 	storeappBuildConfigToken = parseStoreappBuildConfigToken()
+	zealotDownload = parseZealotDownloadConfig()
 	novu = parseNovuConfig()
 	deviceFingerprintSalt = parseDeviceFingerprintSalt()
 	bpay = parseBPayConfig()
@@ -926,6 +928,53 @@ func parseStoreappBuildConfigToken() *string {
 		return nil
 	}
 	return &token
+}
+
+// MinDistrLinkSecretLength is the shortest DISTR_LINK_SECRET that is accepted. The secret is the only thing that
+// separates the download door of Zealot from the internet, so it has to be random and long.
+const MinDistrLinkSecretLength = 32
+
+// ZealotDownloadConfig says that Zealot serves the binary of a finished tenant build (task 40n-g), and how distr
+// proves to Zealot that a click comes from a mail it sent.
+type ZealotDownloadConfig struct {
+	// URL is the origin of Zealot, https, without a path or a trailing slash.
+	URL string
+	// LinkSecret is the shared HMAC key. Zealot reads the same value from its own DISTR_LINK_SECRET.
+	LinkSecret string
+}
+
+// parseZealotDownloadConfig reads ZEALOT_URL and DISTR_LINK_SECRET (both or neither). A half-set pair, a URL that is
+// not a bare https origin, or a secret under MinDistrLinkSecretLength turns the feature off, with a warning, so the
+// download keeps working the way it did before rather than sending a signature to a place that cannot check it.
+func parseZealotDownloadConfig() *ZealotDownloadConfig {
+	rawURL := strings.TrimRight(envutil.GetEnv("ZEALOT_URL"), "/")
+	secret := envutil.GetEnv("DISTR_LINK_SECRET")
+	if rawURL == "" && secret == "" {
+		return nil
+	}
+	if rawURL == "" || secret == "" {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: ZEALOT_URL and DISTR_LINK_SECRET must be set together, downloads through Zealot have been disabled")
+		return nil
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.Path != "" {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: ZEALOT_URL must be an https origin without a path, downloads through Zealot have been disabled")
+		return nil
+	}
+	if len(secret) < MinDistrLinkSecretLength {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: DISTR_LINK_SECRET must be at least 32 characters, downloads through Zealot have been disabled")
+		return nil
+	}
+	return &ZealotDownloadConfig{URL: rawURL, LinkSecret: secret}
+}
+
+// ZealotDownload is where the download of a finished tenant build is served from, or nil when Zealot does not serve
+// it. Without it distr resolves the GitHub Release asset of the record itself, as before.
+func ZealotDownload() *ZealotDownloadConfig {
+	return zealotDownload
 }
 
 // MinBPayWebhookSecretLength is the shortest BPAY_WEBHOOK_SECRET that is accepted.

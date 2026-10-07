@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/distr-sh/distr/internal/apierrors"
+	"github.com/distr-sh/distr/internal/buildlink"
 	"github.com/distr-sh/distr/internal/buildnotify"
 	"github.com/distr-sh/distr/internal/buildtrigger"
 	internalctx "github.com/distr-sh/distr/internal/context"
@@ -48,6 +49,17 @@ func getBuildDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if err != nil {
 		buildStatusInternalError(w, r, "could not get tenant config by download token", err)
+		return
+	}
+
+	// Task 40n-g: when Zealot serves the binary and this record has no GitHub release asset of its own, the click is
+	// answered with a fresh, short-lived signed link to Zealot's door. Nothing is signed ahead of time, so the mail
+	// holds no usable download after its token expires. Records with an asset keep the GitHub route below.
+	if zealot := env.ZealotDownload(); zealot != nil && tenant.ReleaseRepository == nil {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		http.Redirect(w, r,
+			buildlink.URL(zealot.URL, tenant.ID, zealot.LinkSecret, time.Now(), buildlink.DefaultTTL), http.StatusFound)
 		return
 	}
 

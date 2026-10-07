@@ -27,8 +27,9 @@ const (
 	maxMessageLength = 200
 
 	// TenantConfigIDInput is the name of the workflow_dispatch input that carries the TenantConfig id. The workflow
-	// of Storeapp leaf f.vi declares it.
-	TenantConfigIDInput = "tenant_config_id"
+	// of Storeapp (build-tenant-apk.yml) declares it as build_id, and GitHub refuses a dispatch with an input the
+	// workflow does not declare. The value is still the id of the TenantConfig record.
+	TenantConfigIDInput = "build_id"
 )
 
 // ErrNotConfigured means no GitHub token is configured, so no build can be dispatched.

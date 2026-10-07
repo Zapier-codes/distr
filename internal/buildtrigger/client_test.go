@@ -41,7 +41,7 @@ func TestDispatchSendsCanonicalRequest(t *testing.T) {
 		var body dispatchRequest
 		g.Expect(json.NewDecoder(r.Body).Decode(&body)).To(Succeed())
 		g.Expect(body.Ref).To(Equal("main"))
-		g.Expect(body.Inputs).To(Equal(map[string]string{"tenant_config_id": id.String()}))
+		g.Expect(body.Inputs).To(Equal(map[string]string{"build_id": id.String()}))
 		w.WriteHeader(http.StatusNoContent)
 	}))
 

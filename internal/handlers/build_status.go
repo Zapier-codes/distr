@@ -16,6 +16,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
+	"github.com/google/uuid"
 	"github.com/oaswrap/spec/adapter/chiopenapi"
 	"github.com/oaswrap/spec/option"
 	"go.uber.org/zap"
@@ -65,6 +66,16 @@ func postBuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	// Zealot's harvest workflow reports the id as build_id and a good run as "completed" (task 40n-g). Both are the
+	// same facts under other names, so they are accepted next to tenant_config_id and "succeeded".
+	if request.TenantConfigID == uuid.Nil {
+		request.TenantConfigID = request.BuildID
+	}
+	if request.Status == "completed" {
+		request.Status = types.TenantBuildStatusSucceeded
+	}
+	// When Zealot serves the binary, a succeeded build carries no release asset.
+	request.ExternalAsset = request.Asset == nil && env.ZealotDownload() != nil
 	if err := request.Validate(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -81,7 +92,7 @@ func postBuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	// distr will later fetch this asset with its own GitHub token (f.v), so the token holder must not be able to
 	// point that at another repository than the one the builds are dispatched to.
-	if request.Status == types.TenantBuildStatusSucceeded &&
+	if request.Status == types.TenantBuildStatusSucceeded && request.Asset != nil &&
 		!strings.EqualFold(request.Asset.Repository, buildConfig.Repository) {
 		http.Error(w, "asset.repository is not the repository the builds run in", http.StatusBadRequest)
 		return
@@ -95,12 +106,16 @@ func postBuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 		if request.Message != nil && *request.Message != "" {
 			message = request.Message
 		}
-	} else {
+	} else if request.Asset != nil {
 		assetRepository, releaseID, assetID = request.Asset.Repository, request.Asset.ReleaseID, request.Asset.AssetID
 	}
 
-	_, err = db.CompleteTenantBuild(
-		ctx, request.TenantConfigID, request.Status, message, assetRepository, releaseID, assetID)
+	if request.Status == types.TenantBuildStatusSucceeded && request.Asset == nil {
+		_, err = db.CompleteTenantBuildExternal(ctx, request.TenantConfigID)
+	} else {
+		_, err = db.CompleteTenantBuild(
+			ctx, request.TenantConfigID, request.Status, message, assetRepository, releaseID, assetID)
+	}
 	if errors.Is(err, apierrors.ErrConflict) {
 		// Either the record is not building, or this report was already applied and the workflow is retrying.
 		current, _, getErr := db.GetTenantConfigForBuild(ctx, request.TenantConfigID)
@@ -162,6 +177,10 @@ func buildReportAlreadyApplied(request api.BuildStatusRequest, current types.Ten
 		return false
 	}
 	if request.Status == types.TenantBuildStatusFailed {
+		return true
+	}
+	if request.Asset == nil {
+		// Served by Zealot: there is no asset to compare, and the record is already succeeded.
 		return true
 	}
 	return current.ReleaseRepository != nil && current.ReleaseID != nil && current.ReleaseAssetID != nil &&

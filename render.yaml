@@ -84,3 +84,9 @@ services:
         sync: false
       - key: NOVU_BUILD_READY_WORKFLOW_ID
         sync: false
+      # Zealot serves the binary of a finished tenant build (task 40n-g). Both or neither. DISTR_LINK_SECRET is the same
+      # value as on Zealot's zealot-web service, at least 32 characters (`openssl rand -hex 32`).
+      - key: ZEALOT_URL
+        sync: false # https origin of Zealot, no path, e.g. https://zealot-deploy-latest.onrender.com
+      - key: DISTR_LINK_SECRET
+        sync: false
