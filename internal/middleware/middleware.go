@@ -156,6 +156,27 @@ var (
 	RequireAdmin            = RequireAnyUserRole(types.UserRoleAdmin)
 )
 
+// RequireNonDeveloper refuses the request when the authenticated user's role is the marketplace `developer` role
+// (g.iii-a, D6 point 2). It is the backstop for the whole vendor-portal group: even a route that forgets to name a
+// role cannot be reached by a developer, so a developer in the one platform organization can never touch the
+// platform's own vendor data (customers, deployment targets, registry, access tokens). Super admins pass through,
+// since they are not developers. It must run after auth.Authentication.Middleware.
+func RequireNonDeveloper(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isSuperAdmin(r.Context()) {
+			handler.ServeHTTP(w, r)
+			return
+		}
+		if auth, err := auth.Authentication.Get(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+		} else if role := auth.CurrentUserRole(); role != nil && *role == types.UserRoleDeveloper {
+			http.Error(w, "insufficient permissions", http.StatusForbidden)
+		} else {
+			handler.ServeHTTP(w, r)
+		}
+	})
+}
+
 // ForbidSubscriptionTypes blocks the given subscription types. Gating is expressed as a
 // denylist of the lower plans instead of an allowlist of the higher ones, so a newly
 // introduced plan has access by default.

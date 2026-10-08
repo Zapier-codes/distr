@@ -20,9 +20,9 @@ import (
 	"github.com/distr-sh/distr/internal/turnstile"
 	"github.com/distr-sh/distr/internal/types"
 	"github.com/getsentry/sentry-go"
-	"github.com/google/uuid"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
+	"github.com/google/uuid"
 	"github.com/oaswrap/spec/adapter/chiopenapi"
 	"github.com/oaswrap/spec/option"
 	"go.uber.org/zap"
@@ -39,7 +39,7 @@ func PublicProductRequestsRouter(r chiopenapi.Router) {
 		httprate.LimitBy(20, 1*time.Hour, productRequestClientIPKey),
 	)
 	r.Post("/", createProductRequestHandler).
-		With(option.Description("Submit a request for a product build without an account. "+
+		With(option.Description("Submit a request for a product build without an account. " +
 			"No user, organization or customer organization is created or required")).
 		With(option.Request(api.CreateProductRequestRequest{})).
 		With(option.Response(http.StatusCreated, api.ProductRequest{}))
@@ -211,19 +211,18 @@ func getProductRequestPaymentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// applyFreeTierGate is the free/paid check (f.xii). A request is free when the instance has a salt, the browser sent
-// a fingerprint, and no earlier request from that device claimed its free product; the record then moves from
-// awaiting_gate to queued, which is the only way a record reaches a build. Every other request is left
-// awaiting_gate for the payment step (f.xiii). The fingerprint is only ever stored as a salted hash.
+// applyFreeTierGate is the free/paid check (f.xii). A request is free when the instance has a salt, Turnstile is
+// configured, the browser sent a fingerprint, and no earlier request from that device claimed its free product; the
+// record then moves from awaiting_gate to queued, which is the only way a record reaches a build. Every other request
+// is left awaiting_gate for the payment step (f.xiii). The fingerprint is only ever stored as a salted hash.
 func applyFreeTierGate(
 	ctx context.Context, deviceFingerprint string, tenant *types.TenantConfig,
 ) (types.ProductRequestGate, *types.TenantConfig, error) {
-	salt := env.DeviceFingerprintSalt()
-	if salt == nil || deviceFingerprint == "" {
+	if !freeTierCheckConfigured(env.DeviceFingerprintSalt(), env.TurnstileSecret()) || deviceFingerprint == "" {
 		return types.ProductRequestGatePaymentRequired, tenant, nil
 	}
 
-	hash, err := devicefingerprint.Hash(*salt, deviceFingerprint)
+	hash, err := devicefingerprint.Hash(*env.DeviceFingerprintSalt(), deviceFingerprint)
 	if err != nil {
 		return "", nil, err
 	}
@@ -241,6 +240,14 @@ func applyFreeTierGate(
 		return "", nil, err
 	}
 	return types.ProductRequestGateFree, queued, nil
+}
+
+// freeTierCheckConfigured reports whether this instance may give a free product at all. It needs the fingerprint salt
+// to record a claim, and it needs Turnstile configured: D4 says the fingerprint is a deterrent, not proof, so the free
+// product must never be reachable without the human check. A missing Turnstile is a misconfiguration that leaves every
+// request awaiting_gate, never a free pass. The pure form lets both be exercised directly, without a live instance.
+func freeTierCheckConfigured(salt, turnstileSecret *string) bool {
+	return salt != nil && turnstileSecret != nil
 }
 
 // dispatchFreeBuild starts the build of a record the gate has queued and returns the record as it is afterwards. A

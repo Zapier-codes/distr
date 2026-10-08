@@ -66,6 +66,14 @@ services:
         sync: false # >= 32 chars; the same value as Storeapp's STOREAPP_BUILD_CONFIG_TOKEN repository secret
       - key: DEVICE_FINGERPRINT_SALT
         sync: false # >= 32 random chars; changing it forgets every free claim, so never rotate it
+
+      # g.iii-a (D6 point 1, D7): the old sign-up created an organization per person, so it is switched off; the
+      # only public sign-up is /auth/developer/join, which adds the account to the one platform organization. Email
+      # verification is off so a developer can sign in at once (D7, operator-accepted: an email is not proof here).
+      - key: REGISTRATION
+        value: disabled
+      - key: USER_EMAIL_VERIFICATION_REQUIRED
+        value: "false"
       - key: BPAY_API_URL
         sync: false # B-Pay (Zapier-codes' own payment gateway), f.xiii
       - key: BPAY_API_KEY

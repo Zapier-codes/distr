@@ -29,3 +29,23 @@ func ProductServiceMediaToAPI(media types.ProductServiceMedia) api.ProductServic
 		Caption: media.Caption,
 	}
 }
+
+// DeveloperListingToAPI maps a listing for its owner (g.iii-b). It never leaves the handler for a storefront
+// visitor: the public catalogue uses ProductServiceToAPI, which hides the owner and the draft state.
+func DeveloperListingToAPI(listing types.ProductService) api.DeveloperListing {
+	var price *api.ProductPrice
+	if listing.PriceMinor != nil && listing.PriceCurrency != nil {
+		price = &api.ProductPrice{AmountMinor: *listing.PriceMinor, Currency: *listing.PriceCurrency}
+	}
+	return api.DeveloperListing{
+		ID:            listing.ID,
+		Slug:          listing.Slug,
+		Type:          listing.Type,
+		Name:          listing.Name,
+		Summary:       listing.Summary,
+		Description:   listing.Description,
+		Active:        listing.Active,
+		ListingStatus: listing.ListingStatus,
+		Price:         price,
+	}
+}

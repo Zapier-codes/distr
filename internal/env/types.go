@@ -16,6 +16,9 @@ const (
 type RegistrationMode string
 
 const (
+	// RegistrationDisabled is the mode where POST /auth/register refuses. g.iii-a switches the deploy files to
+	// this: the only public sign-up is /auth/developer/join, which adds the account to the one platform
+	// organization instead of creating one per signup (D6 point 1, D7).
 	RegistrationEnabled  RegistrationMode = "enabled"
 	RegistrationHidden   RegistrationMode = "hidden"
 	RegistrationDisabled RegistrationMode = "disabled"

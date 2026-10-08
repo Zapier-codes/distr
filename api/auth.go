@@ -34,6 +34,24 @@ func (r *AuthRegistrationRequest) Validate() error {
 	return nil
 }
 
+// DeveloperJoinRequest is the open developer sign-up (g.iii-a). It never carries an organization name: the new
+// account joins the one platform organization with the narrow developer role.
+type DeveloperJoinRequest struct {
+	Name           string `json:"name"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	TurnstileToken string `json:"turnstileToken,omitempty"`
+}
+
+func (r *DeveloperJoinRequest) Validate() error {
+	if r.Email == "" {
+		return validation.NewValidationFailedError("email is empty")
+	} else if err := validation.ValidatePassword(r.Password); err != nil {
+		return err
+	}
+	return nil
+}
+
 type AuthResetPasswordRequest struct {
 	Email string `json:"email"`
 }

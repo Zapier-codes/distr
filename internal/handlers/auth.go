@@ -34,6 +34,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// PlatformOrganizationSlug identifies the one platform organization (g.iii-a, D6). It is created by migration 149
+// and holds every marketplace developer, so developer sign-up adds a user to it instead of creating an organization.
+const PlatformOrganizationSlug = "distr-marketplace"
+
 func AuthRouter(r chiopenapi.Router) {
 	r.WithOptions(option.GroupHidden(true))
 	r.Use(httprate.LimitBy(
@@ -47,6 +51,7 @@ func AuthRouter(r chiopenapi.Router) {
 	r.Post("/login", authLoginHandler)
 	r.Route("/oidc", AuthOIDCRouter)
 	r.Post("/register", authRegisterHandler)
+	r.Post("/developer/join", authDeveloperJoinHandler)
 	r.Post("/reset", authResetPasswordHandler)
 	r.With(
 		auth.Authentication.Middleware,
@@ -452,6 +457,92 @@ func authRegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 		RespondJSON(w, api.AuthLoginResponse{Token: token})
 	}
+}
+
+// authDeveloperJoinHandler is the open developer sign-up (g.iii-a, D6/D7/D8). It is a separate path from
+// /auth/register on purpose: a developer is a user of the one platform organization, so this never creates an
+// organization and never consults the global organization limit. The new account is given the narrow developer
+// role, which every vendor-portal route refuses. Email verification is instance-wide and off in the deploy files
+// (D7), so the account can sign in at once.
+func authDeveloperJoinHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := internalctx.GetLogger(ctx)
+
+	if !env.DeveloperJoinEnabled() {
+		http.Error(w, "developer sign-up is disabled", http.StatusForbidden)
+		return
+	}
+
+	if host, err := resolvePortalHost(ctx, validation.NormalizeHostname(r.Host)); err != nil {
+		log.Error("could not resolve host for developer join", zap.Error(err))
+		sentry.GetHubFromContext(ctx).CaptureException(err)
+		http.Error(w, "developer sign-up is not available on this domain", http.StatusForbidden)
+		return
+	} else if !host.registrationAllowed() {
+		http.Error(w, "developer sign-up is not available on this domain", http.StatusForbidden)
+		return
+	}
+
+	request, err := JsonBody[api.DeveloperJoinRequest](w, r)
+	if err != nil {
+		return
+	}
+	if err := request.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !verifyRegistrationChallenge(w, r, request.TurnstileToken) {
+		return
+	}
+
+	userAccount := types.UserAccount{
+		Name:     request.Name,
+		Email:    request.Email,
+		Password: request.Password,
+	}
+	var token string
+
+	if err := db.RunTx(ctx, func(ctx context.Context) error {
+		platformOrg, err := db.GetOrganizationBySlug(ctx, PlatformOrganizationSlug)
+		if errors.Is(err, apierrors.ErrNotFound) {
+			err = errors.New("developer sign-up is not available on this instance")
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return err
+		} else if err != nil {
+			sentry.GetHubFromContext(ctx).CaptureException(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return err
+		} else if err := security.HashPassword(&userAccount); err != nil {
+			sentry.GetHubFromContext(ctx).CaptureException(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return err
+		} else if err := db.CreateUserAccount(ctx, &userAccount); err != nil {
+			if errors.Is(err, apierrors.ErrAlreadyExists) {
+				http.Error(w, "an account with this email address already exists, please log in instead",
+					http.StatusBadRequest)
+			} else {
+				sentry.GetHubFromContext(ctx).CaptureException(err)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			return err
+		} else if err := db.CreateUserAccountOrganizationAssignment(
+			ctx, userAccount.ID, platformOrg.ID, types.UserRoleDeveloper, nil, nil,
+		); err != nil {
+			sentry.GetHubFromContext(ctx).CaptureException(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return err
+		} else if token, err = userauth.GenerateLoginToken(ctx, userAccount); err != nil {
+			sentry.GetHubFromContext(ctx).CaptureException(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return err
+		}
+		return nil
+	}); err != nil {
+		log.Warn("developer join failed", zap.Error(err))
+		return
+	}
+
+	RespondJSON(w, api.AuthLoginResponse{Token: token})
 }
 
 func verifyRegistrationChallenge(w http.ResponseWriter, r *http.Request, token string) bool {

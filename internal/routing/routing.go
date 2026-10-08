@@ -161,6 +161,9 @@ func ApiRouter(
 						auth.Authentication.Middleware,
 						middleware.SetSentryUserFromUserAuth,
 						middleware.RequireEmailVerified,
+						// g.iii-a: the marketplace `developer` role is refused by the whole vendor-portal group, so a
+						// developer can never reach the platform's own data even on a route that does not name a role.
+						middleware.RequireNonDeveloper,
 						httprate.LimitBy(30, 1*time.Second, middleware.RateLimitUserIDKey),
 						httprate.LimitBy(300, 1*time.Minute, middleware.RateLimitUserIDKey),
 						httprate.LimitBy(2000, 1*time.Hour, middleware.RateLimitUserIDKey),
@@ -206,6 +209,26 @@ func ApiRouter(
 					r.Route("/user-accounts", handlers.UserAccountsRouter)
 					r.With(middleware.VulnerabilitiesFeatureMiddleware).
 						Route("/advisories", handlers.AdvisoriesRouter)
+
+					// g.iii-b: the developer's own listings. This group repeats the authentication chain but
+					// deliberately omits RequireNonDeveloper, which the enclosing group applies to every other
+					// vendor route: a developer is exactly who these routes are for, and they only ever touch
+					// listings the caller owns. It is nested here so the group middleware (authentication,
+					// email-verified, rate limits) still runs before the handler.
+					r.Group(func(r chiopenapi.Router) {
+						r.WithOptions(
+							option.GroupSecurity("accessToken"),
+							option.GroupSecurity("bearer"),
+						)
+						r.Use(
+							auth.Authentication.Middleware,
+							middleware.SetSentryUserFromUserAuth,
+							middleware.RequireEmailVerified,
+							httprate.LimitBy(30, 1*time.Second, middleware.RateLimitUserIDKey),
+							httprate.LimitBy(300, 1*time.Minute, middleware.RateLimitUserIDKey),
+						)
+						r.Route("/developer/listings", handlers.DeveloperListingsRouter)
+					})
 				})
 			})
 

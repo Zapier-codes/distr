@@ -17,6 +17,10 @@ import (
 type UserRole string
 
 const (
+	// UserRoleDeveloper is the marketplace seller role (g.iii-a, D6). It is deliberately the lowest rank, below
+	// read_only, so every vendor-portal route — which requires read_write or admin — refuses it without having to
+	// name it, and a developer can reach only the developer-owned routes (listings, earnings).
+	UserRoleDeveloper UserRole = "developer"
 	UserRoleReadOnly  UserRole = "read_only"
 	UserRoleReadWrite UserRole = "read_write"
 	UserRoleAdmin     UserRole = "admin"
@@ -24,6 +28,8 @@ const (
 
 func ParseUserRole(value string) (UserRole, error) {
 	switch value {
+	case string(UserRoleDeveloper):
+		return UserRoleDeveloper, nil
 	case string(UserRoleReadOnly):
 		return UserRoleReadOnly, nil
 	case string(UserRoleReadWrite):
@@ -35,17 +41,19 @@ func ParseUserRole(value string) (UserRole, error) {
 	}
 }
 
-// Rank orders the role hierarchy: admin > read_write > read_only. It panics
+// Rank orders the role hierarchy: admin > read_write > read_only > developer. It panics
 // for unknown roles — every role entering the codebase is validated via
 // ParseUserRole / UnmarshalJSON, so an invalid value at this point is a bug.
 func (r UserRole) Rank() int {
 	switch r {
-	case UserRoleReadOnly:
+	case UserRoleDeveloper:
 		return 0
-	case UserRoleReadWrite:
+	case UserRoleReadOnly:
 		return 1
-	case UserRoleAdmin:
+	case UserRoleReadWrite:
 		return 2
+	case UserRoleAdmin:
+		return 3
 	default:
 		panic(fmt.Sprintf("invalid user role: %q", string(r)))
 	}

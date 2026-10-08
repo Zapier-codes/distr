@@ -3,6 +3,7 @@ package env
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -179,14 +180,8 @@ func Initialize() {
 	registration = envutil.GetEnvParsedOrDefault("REGISTRATION", parseRegistrationMode, RegistrationEnabled)
 	// Turnstile needs the site key in the browser and the secret on the server, so a half-configured widget
 	// can only ever fail: either the form has no widget to solve, or its token cannot be verified.
-	if siteKey, secret := envutil.GetEnv("TURNSTILE_SITE_KEY"), envutil.GetEnv("TURNSTILE_SECRET"); siteKey != "" &&
-		secret != "" {
-		turnstileSiteKey = &siteKey
-		turnstileSecret = &secret
-	} else if siteKey != "" || secret != "" {
-		fmt.Fprintln(os.Stderr,
-			"WARNING: TURNSTILE_SITE_KEY and TURNSTILE_SECRET must both be set, Turnstile has been disabled")
-	}
+	turnstileSiteKey, turnstileSecret = mustParseTurnstile(
+		envutil.GetEnv("TURNSTILE_SITE_KEY"), envutil.GetEnv("TURNSTILE_SECRET"))
 	if email := envutil.GetEnv("SUPPORT_EMAIL"); email != "" {
 		supportEmail = &email
 	}
@@ -550,12 +545,44 @@ func Registration() RegistrationMode {
 	return registration
 }
 
+// DeveloperJoinEnabled reports whether the open developer sign-up (g.iii-a) is available. It is on unless the
+// operator explicitly disables registration; the developer path is deliberately independent of the portal's
+// registration modes, because it never creates an organization.
+func DeveloperJoinEnabled() bool {
+	return registration != RegistrationDisabled
+}
+
 func TurnstileSiteKey() *string {
 	return turnstileSiteKey
 }
 
 func TurnstileSecret() *string {
 	return turnstileSecret
+}
+
+// mustParseTurnstile is ParseTurnstile with the "or neither" half-configuration refused at startup. Exported
+// behaviour is exercised through ParseTurnstile; this wrapper is only what Initialize calls.
+func mustParseTurnstile(siteKey, secret string) (*string, *string) {
+	key, sec, err := ParseTurnstile(siteKey, secret)
+	if err != nil {
+		panic(err)
+	}
+	return key, sec
+}
+
+// ParseTurnstile turns the two Turnstile settings into the values the widget and the verifier use. It is exported
+// so the "both or neither" rule can be exercised directly, and so g.i-c's operator check can say what a given pair
+// of settings does. Turnstile is all-or-nothing: the site key has no use without the secret, and the free claim must
+// not be reachable unverified (D4). Neither setting is "not configured yet" and turns the widget and the check off;
+// a half-configured pair is a startup error, never a silent bypass.
+func ParseTurnstile(siteKey, secret string) (*string, *string, error) {
+	if siteKey == "" && secret == "" {
+		return nil, nil, nil
+	}
+	if siteKey == "" || secret == "" {
+		return nil, nil, errors.New("TURNSTILE_SITE_KEY and TURNSTILE_SECRET must both be set, or neither")
+	}
+	return &siteKey, &secret, nil
 }
 
 // StoreappBuild is the target of the tenant build dispatch, or nil when it is not configured. Without it no build
